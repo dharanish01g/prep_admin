@@ -215,6 +215,17 @@
     .trust h3 { margin: 0 0 6px; }
     .trust .links { display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
 
+    .get { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
+    @media (max-width: 760px) { .get { grid-template-columns: 1fr; } }
+    .get .card { display: flex; flex-direction: column; align-items: flex-start; }
+    .get ol { margin: 10px 0 20px; padding-left: 20px; color: var(--text-2); }
+    .get li { margin: 6px 0; }
+    .get .card p { margin-bottom: 20px; }
+    .get .btn { margin-top: auto; }
+    .btn-brand { background: var(--grad); color: #fff; }
+    .btn-outline { color: var(--brand); border: 1px solid var(--brand); }
+    .fine { font-size: 13.5px; color: var(--muted); margin: 12px 0 0; }
+
     .final {
       margin-top: 88px; background: var(--grad); color: #fff; border-radius: 28px;
       padding: 48px 32px; text-align: center;
@@ -246,6 +257,7 @@
       <div class="links">
         <a href="#how">How it works</a>
         <a href="#features">What's inside</a>
+        <a href="#download">Download</a>
         <a href="privacy.html">Privacy</a>
       </div>
     </nav>
@@ -258,10 +270,10 @@
         what needs doing and by when, and to see when it's done. Takes ten seconds,
         and there's nothing to learn.</p>
         <div class="cta">
-          <a class="btn btn-light" href="#how">See how it works</a>
-          <a class="btn btn-ghost" href="mailto:dharanigowthamsampath@gmail.com?subject=PrepWisely%20Team%20early%20access">Get early access</a>
+          <a class="btn btn-light" href="https://github.com/dharanish01g/prep_admin/releases/latest/download/prepwisely-team.apk"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download for Android</a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
         </div>
-        <p class="soon">Coming soon to Google Play and the App Store.</p>
+        <p class="soon">Free for everyone. Android only for now; iPhone later.</p>
       </div>
 
       <div class="phone-col">
@@ -425,6 +437,38 @@
     </div>
   </section>
 
+  <section id="download">
+    <div class="kicker">Get the app</div>
+    <h2>Free, and on Android today.</h2>
+    <p class="sub">No paid plan, no per-seat pricing. It's a direct download for
+    now, while we look for help getting it into the app stores.</p>
+
+    <div class="get">
+      <div class="card">
+        <h3>Install on Android</h3>
+        <ol>
+          <li>Download the app on your phone.</li>
+          <li>Open the downloaded file. Android asks you to allow installs from
+          your browser: allow it.</li>
+          <li>If Play Protect warns that it doesn't know the app, choose
+          <b>Install anyway</b>. It warns because the app isn't on the Play
+          Store yet.</li>
+        </ol>
+        <a class="btn btn-brand" href="https://github.com/dharanish01g/prep_admin/releases/latest/download/prepwisely-team.apk"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download for Android</a>
+        <p class="fine">Version 1.0, about 18 MB, for 64-bit Android phones.</p>
+      </div>
+      <div class="card">
+        <h3>Help us reach the Play Store and App Store</h3>
+        <p>We want everyone to be able to use this for free, but we don't have
+        Play Store or Apple developer accounts. If you have one and can publish
+        the app under your account, we'd love to hear from you. The app is open
+        source, so you can see exactly what you'd be publishing.</p>
+        <a class="btn btn-outline" href="https://wa.me/917401777918?text=Hi%2C%20I%20can%20help%20publish%20PrepWisely%20Team">Message us on WhatsApp</a>
+        <p class="fine">+91 74017 77918 · <a href="https://github.com/dharanish01g/prep_admin">Source code on GitHub</a></p>
+      </div>
+    </div>
+  </section>
+
   <section>
     <div class="card trust">
       <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
@@ -432,20 +476,21 @@
         <h3>Your data stays yours</h3>
         <p>No ads, no tracking and no selling of data. Only members of a team can see
         what's inside it, and you can delete your account at any time from inside
-        the app.</p>
+        the app. The code is open source under GPL-3.0, so anyone can check.</p>
       </div>
       <div class="links">
         <a href="privacy.html">Privacy policy</a>
         <a href="delete-account.html">Delete your account</a>
+        <a href="https://github.com/dharanish01g/prep_admin">Source code</a>
       </div>
     </div>
   </section>
 
   <div class="final">
-    <h2>Coming soon to Android and iPhone.</h2>
-    <p>Want to try it with your team before launch? Drop a line and we'll send you
-    early access.</p>
-    <a class="btn btn-light" href="mailto:dharanigowthamsampath@gmail.com?subject=PrepWisely%20Team%20early%20access">Get early access</a>
+    <h2>Try it with your team today.</h2>
+    <p>Free for everyone. Android only for now; iPhone once we're in the App
+    Store.</p>
+    <a class="btn btn-light" href="https://github.com/dharanish01g/prep_admin/releases/latest/download/prepwisely-team.apk"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download for Android</a>
   </div>
 
   <footer>
@@ -453,7 +498,8 @@
     <span>
       <a href="privacy.html">Privacy</a>
       <a href="delete-account.html">Delete account</a>
-      <a href="mailto:dharanigowthamsampath@gmail.com">Contact</a>
+      <a href="https://github.com/dharanish01g/prep_admin">Source code</a>
+      <a href="https://wa.me/917401777918">Contact</a>
     </span>
   </footer>
 </main>
