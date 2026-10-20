@@ -1,23 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'config.dart';
 import 'data/supabase_task_remote.dart';
 import 'data/task_store.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/team_setup_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/offline_banner.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(
-    url: supabaseUrl,
-    publishableKey: supabasePublishableKey,
-  );
-  final store = TaskStore.connected(
-    SupabaseTaskRemote(Supabase.instance.client),
-  );
+  // Draw first; Supabase starts in the background (see
+  // SupabaseTaskRemote.initialize) while the store opens from its saved copy.
+  final store = TaskStore.connected(SupabaseTaskRemote.initialize());
   runApp(PrepAdminApp(store: store));
 }
 
@@ -57,12 +52,14 @@ class _PrepAdminAppState extends State<PrepAdminApp> {
       child: ValueListenableBuilder(
         valueListenable: widget.store.themeMode,
         builder: (context, themeMode, _) => MaterialApp(
-          title: 'PrepWisely Team',
+          title: 'Tiny Tasks',
           debugShowCheckedModeBanner: false,
           scaffoldMessengerKey: _messenger,
           theme: buildAppTheme(Brightness.light),
           darkTheme: buildAppTheme(Brightness.dark),
           themeMode: widget.themeMode ?? themeMode,
+          builder: (context, child) =>
+              OfflineBanner(online: widget.store.online, child: child!),
           home: const _Root(),
         ),
       ),
@@ -84,27 +81,52 @@ class _Root extends StatelessWidget {
   }
 }
 
+/// Same colour and image as the native launch screen (see
+/// `flutter_native_splash` in pubspec.yaml; Android 12+ draws it at 288dp),
+/// so the hand-over is invisible. Usually gone at once: signed-in users open
+/// from their saved copy. If loading is slow it says so after 2 seconds
+/// instead of showing only the logo.
 class _Splash extends StatelessWidget {
   const _Splash();
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
+    final slow = StoreScope.of(context).slowStart;
     return Scaffold(
-      body: Center(
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            gradient: c.brandGradient,
-            borderRadius: BorderRadius.circular(22),
+      backgroundColor: const Color(0xFF6D5DFC),
+      body: Stack(
+        alignment: Alignment.center,
+        children: [
+          const Image(
+            image: AssetImage('assets/icon/splash.png'),
+            width: 288,
+            height: 288,
           ),
-          child: const Icon(
-            Icons.task_alt_rounded,
-            color: Colors.white,
-            size: 36,
-          ),
-        ),
+          if (slow)
+            const Positioned(
+              bottom: 96,
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'Loading your tasks…',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

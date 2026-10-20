@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -5,10 +6,11 @@ import '../config.dart';
 import '../data/task_remote.dart';
 import '../data/task_store.dart';
 import '../theme/app_theme.dart';
+import '../utils/versions.dart';
 import '../widgets/member_avatar.dart';
 import '../widgets/ui.dart';
 
-/// Name, theme, privacy policy and account deletion.
+/// Name, theme, privacy policy, updates and account deletion.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -99,6 +101,8 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const Divider(indent: 54),
                 const _VersionRow(),
+                const Divider(indent: 54),
+                const _UpdateRow(),
               ],
             ),
           ),
@@ -197,6 +201,133 @@ class _VersionRow extends StatelessWidget {
         label: 'Version',
         value: snapshot.data?.version ?? '',
       ),
+    );
+  }
+}
+
+/// Compares the installed version with the newest one in `app_versions`.
+class _UpdateRow extends StatefulWidget {
+  const _UpdateRow();
+
+  @override
+  State<_UpdateRow> createState() => _UpdateRowState();
+}
+
+class _UpdateRowState extends State<_UpdateRow> {
+  bool _checking = false;
+
+  Future<void> _check() async {
+    final store = StoreScope.read(context);
+    final platform = defaultTargetPlatform == TargetPlatform.iOS
+        ? 'ios'
+        : 'android';
+    setState(() => _checking = true);
+    final String installed;
+    final AppRelease? latest;
+    try {
+      installed = (await PackageInfo.fromPlatform()).version;
+      latest = await store.latestRelease(platform);
+    } on TaskRemoteException catch (e) {
+      if (mounted) {
+        setState(() => _checking = false);
+        showErrorSnackBar(context, e);
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _checking = false);
+    await showDialog<void>(
+      context: context,
+      builder: (_) =>
+          latest != null && isNewerVersion(latest.version, installed)
+          ? _UpdateAvailableDialog(release: latest, installed: installed)
+          : AlertDialog(
+              title: const Text("You're up to date"),
+              content: Text('Tiny Tasks $installed is the latest version.'),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return _SettingsRow(
+      icon: Icons.system_update_outlined,
+      label: 'Check for updates',
+      trailing: _checking
+          ? SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: c.brand,
+              ),
+            )
+          : Icon(Icons.chevron_right_rounded, color: c.textMuted),
+      onTap: _checking ? null : _check,
+    );
+  }
+}
+
+class _UpdateAvailableDialog extends StatelessWidget {
+  const _UpdateAvailableDialog({
+    required this.release,
+    required this.installed,
+  });
+
+  final AppRelease release;
+  final String installed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final url = release.downloadUrl;
+    return AlertDialog(
+      title: const Text('Update available'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Version ${release.version} is out. You have $installed.'),
+            if (release.notes.trim().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const FieldLabel("What's new"),
+              Text(
+                release.notes.trim(),
+                style: TextStyle(color: c.textSecondary),
+              ),
+            ],
+            if (url == null) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Ask your team owner for the new version.',
+                style: TextStyle(color: c.textSecondary),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(url == null ? 'OK' : 'Later'),
+        ),
+        if (url != null)
+          FilledButton(
+            onPressed: () {
+              openLink(context, url);
+              Navigator.pop(context);
+            },
+            child: const Text('Update'),
+          ),
+      ],
     );
   }
 }

@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  connectivity_plus: ^7.3.2
   flutter:
     sdk: flutter
   package_info_plus: ^10.2.2
@@ -47,6 +48,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -73,9 +76,9 @@ flutter:
           weight: 800
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    # Shown by the in-app splash; matches the native launch screen.
+    - assets/icon/splash.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -102,3 +105,25 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# App icon: `dart run flutter_launcher_icons` regenerates every size from
+# assets/icon (drawn by assets/icon/make_icon.py).
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/icon.png
+  adaptive_icon_background: assets/icon/background.png
+  adaptive_icon_foreground: assets/icon/foreground.png
+  adaptive_icon_foreground_inset: 0  # foreground.png is already sized to the safe zone
+  remove_alpha_ios: true
+
+# Launch screen: `dart run flutter_native_splash:create` regenerates it. The
+# in-app splash (_Splash in main.dart) draws the same image on the same colour
+# so the two blend.
+flutter_native_splash:
+  color: "#6D5DFC"
+  image: assets/icon/splash.png
+  android_12:
+    color: "#6D5DFC"
+    image: assets/icon/splash.png
+  web: false

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:prep_admin/data/task_store.dart';
 import 'package:prep_admin/main.dart';
@@ -305,5 +306,56 @@ void main() {
       Theme.of(tester.element(find.text('Settings').first)).brightness,
       Brightness.dark,
     );
+  });
+
+  testWidgets('check for updates says up to date', (tester) async {
+    PackageInfo.setMockInitialValues(
+      appName: 'Tiny Tasks',
+      packageName: 'com.example.prep_admin',
+      version: '1.0.0',
+      buildNumber: '1',
+      buildSignature: '',
+    );
+    await pumpSignedIn(tester);
+    await openSettings(tester);
+    await tester.scrollUntilVisible(find.text('Check for updates'), 100);
+    await tester.tap(find.text('Check for updates'));
+    await tester.pumpAndSettle();
+    expect(find.text("You're up to date"), findsOneWidget);
+    expect(find.textContaining('1.0.0 is the latest'), findsOneWidget);
+  });
+
+  testWidgets('no-internet banner shows on the login screen', (tester) async {
+    final store = TaskStore.mock();
+    await tester.pumpWidget(PrepAdminApp(store: store));
+    expect(find.text('No internet connection'), findsNothing);
+
+    store.online.value = false;
+    await tester.pumpAndSettle();
+    expect(find.text('No internet connection'), findsOneWidget);
+    expect(find.text('Welcome back'), findsOneWidget);
+
+    store.online.value = true;
+    await tester.pumpAndSettle();
+    expect(find.text('No internet connection'), findsNothing);
+  });
+
+  testWidgets('no-internet banner shows on home and keeps the screen', (
+    tester,
+  ) async {
+    final store = await pumpSignedIn(tester);
+    await tester.tap(find.text('Board'));
+    await tester.pumpAndSettle();
+
+    store.online.value = false;
+    await tester.pumpAndSettle();
+    expect(find.text('No internet connection'), findsOneWidget);
+
+    store.online.value = true;
+    await tester.pumpAndSettle();
+    expect(find.text('No internet connection'), findsNothing);
+    // Still on the Board tab: the banner didn't rebuild the app under it.
+    final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(nav.selectedIndex, 1);
   });
 }

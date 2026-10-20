@@ -421,9 +421,9 @@ Future<void> shareInvite(BuildContext context, Team team) {
   final box = context.findRenderObject() as RenderBox?;
   return SharePlus.instance.share(
     ShareParams(
-      subject: 'Join ${team.name} on PrepWisely Team',
+      subject: 'Join ${team.name} on Tiny Tasks',
       text:
-          'Join ${team.name} on PrepWisely Team.\n\n'
+          'Join ${team.name} on Tiny Tasks.\n\n'
           'Open the app, tap "Join with a code" and enter: ${team.joinCode}',
       // Anchor for the iPad share popover.
       sharePositionOrigin: box == null

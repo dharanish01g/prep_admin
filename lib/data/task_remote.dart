@@ -17,10 +17,26 @@ class RemoteSnapshot {
   final List<Task> tasks;
 }
 
+/// The newest version published for a platform (see `app_versions`).
+class AppRelease {
+  const AppRelease({
+    required this.version,
+    required this.downloadUrl,
+    required this.notes,
+  });
+
+  final String version;
+  final String? downloadUrl;
+  final String notes;
+}
+
 /// A failure worth showing to the user as-is.
 class TaskRemoteException implements Exception {
-  const TaskRemoteException(this.message);
+  const TaskRemoteException(this.message, {this.offline = false});
   final String message;
+
+  /// The server couldn't be reached (no internet), as opposed to refusing.
+  final bool offline;
 
   @override
   String toString() => message;
@@ -42,7 +58,25 @@ abstract class TaskRemote {
   /// Renames the signed-in user; teammates see it everywhere.
   Future<void> updateName(String fullName);
 
+  /// Null when nothing is published for [platform] ('android' or 'ios').
+  Future<AppRelease?> latestRelease(String platform);
+
+  /// Loads everything from the server and saves a copy on the device.
   Future<RemoteSnapshot> fetch();
+
+  /// The copy saved by the last [fetch] and whose it is, so the app can open
+  /// instantly, even before the backend has started; null if there is none.
+  Future<({String userId, RemoteSnapshot snapshot})?> cachedSnapshot();
+
+  /// Told after each request whether the server answered (true) or couldn't
+  /// be reached (false).
+  void Function(bool reachable)? onReachability;
+
+  /// A tiny request, to find out whether the server is reachable again.
+  Future<void> ping();
+
+  /// Forgets the saved copy (signing out).
+  Future<void> clearCache();
 
   /// Calls [onChange] whenever data the user can see changes elsewhere.
   void listen(void Function() onChange);

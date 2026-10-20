@@ -91,14 +91,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     child: const Icon(
-                      Icons.task_alt_rounded,
+                      Icons.check_box_rounded,
                       color: Colors.white,
                       size: 34,
                     ),
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'PrepWisely Team',
+                    'Tiny Tasks',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 26,

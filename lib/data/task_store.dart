@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,13 +40,17 @@ class TaskStore extends ChangeNotifier {
     );
   }
 
-  factory TaskStore.connected(TaskRemote remote) => TaskStore(
-    members: [],
-    teams: [],
-    memberships: [],
-    tasks: [],
-    remote: remote,
-  ).._start();
+  /// [watchNetwork] follows the phone's Wi-Fi/mobile state through the
+  /// connectivity plugin; off where there is no Flutter app (backend tests),
+  /// leaving requests alone to decide whether the app is online.
+  factory TaskStore.connected(TaskRemote remote, {bool watchNetwork = true}) =>
+      TaskStore(
+        members: [],
+        teams: [],
+        memberships: [],
+        tasks: [],
+        remote: remote,
+      ).._start(watchNetwork: watchNetwork);
 
   final TaskRemote? remote;
   final List<Member> _members;
@@ -65,6 +70,12 @@ class TaskStore extends ChangeNotifier {
   /// True until the first session check (and data load) has finished.
   bool get starting => _starting;
   bool _starting = false;
+
+  /// Still [starting] after 2 seconds: the splash shows a loading message.
+  bool get slowStart => _slowStart;
+  bool _slowStart = false;
+  Timer? _slowStartTimer;
+  bool _disposed = false;
 
   /// Last team each person had open (mock mode; the real app uses prefs).
   final Map<String, String> _lastTeam = {};
@@ -97,30 +108,139 @@ class TaskStore extends ChangeNotifier {
 
   // Session ------------------------------------------------------------------
 
-  void _start() {
+  void _start({required bool watchNetwork}) {
     _starting = true;
+    _slowStartTimer = Timer(const Duration(seconds: 2), () {
+      if (_disposed || !_starting) return;
+      _slowStart = true;
+      notifyListeners();
+    });
     unawaited(_loadTheme());
-    _authSub = remote!.userIds.listen(_onUser);
+    remote!.onReachability = _setOnline;
+    if (watchNetwork) _watchNetwork();
+    unawaited(_openFromCache());
+  }
+
+  /// Someone was signed in last time: show their saved tasks right away,
+  /// without waiting for the backend to start. The session check that
+  /// follows confirms them (and catches up) or signs them out.
+  Future<void> _openFromCache() async {
+    final r = remote!;
+    final cached = await r.cachedSnapshot();
+    if (_disposed) return;
+    if (cached != null) {
+      _apply(cached.snapshot);
+      await _signedIn(cached.userId);
+    }
+    _authSub = r.userIds.listen(_onUser);
   }
 
   Future<void> _onUser(String? userId) async {
+    final r = remote!;
+    _pendingUserId = null;
     if (userId == null) {
-      remote!.stopListening();
+      r.stopListening();
       _clear();
+      unawaited(r.clearCache());
+      _starting = false;
+      notifyListeners();
+      // Nothing else talks to the server on the login screen, so check it
+      // once: Wi-Fi without internet should still show the banner.
+      unawaited(_retry());
+      return;
+    }
+    if (_currentUser?.id == userId) {
+      // Already showing their saved copy: catch up in the background
+      // (listening also triggers a refresh once connected).
+      _scheduleRefresh();
+      r.listen(_scheduleRefresh);
+      return;
+    }
+    if (_currentUser != null) _clear();
+    await _loadFresh(userId);
+  }
+
+  /// First load for a user with nothing saved. Offline, it waits (on the
+  /// splash or login screen, under the banner) and is retried when the
+  /// connection is back.
+  Future<void> _loadFresh(String userId) async {
+    _pendingUserId = userId;
+    try {
+      await _reload();
+    } on TaskRemoteException catch (e) {
+      if (_disposed || e.offline) return;
+      _pendingUserId = null;
+      onError?.call(e.message);
       _starting = false;
       notifyListeners();
       return;
     }
-    try {
-      await _reload();
-      // The profile row is created by a trigger; fall back if it's missing.
-      _currentUser =
-          memberById(userId) ?? Member(id: userId, fullName: '', email: '');
-      _currentTeamId = await _restoreTeam(userId);
-      remote!.listen(_scheduleRefresh);
-    } on TaskRemoteException catch (e) {
-      onError?.call(e.message);
+    if (_disposed || _pendingUserId != userId) return;
+    _pendingUserId = null;
+    await _signedIn(userId);
+    remote!.listen(_scheduleRefresh);
+  }
+
+  // Connection -----------------------------------------------------------------
+
+  /// False while the server can't be reached; the app shows a banner.
+  final online = ValueNotifier(true);
+  String? _pendingUserId;
+  StreamSubscription<List<ConnectivityResult>>? _networkSub;
+  Timer? _retryTimer;
+
+  void _watchNetwork() {
+    final connectivity = Connectivity();
+    _networkSub = connectivity.onConnectivityChanged.listen(
+      _onNetwork,
+      onError: (_) {},
+    );
+    unawaited(
+      connectivity.checkConnectivity().then(_onNetwork, onError: (_) {}),
+    );
+  }
+
+  void _onNetwork(List<ConnectivityResult> results) {
+    if (_disposed) return;
+    if (results.every((r) => r == ConnectivityResult.none)) {
+      _setOnline(false);
+    } else if (!online.value) {
+      // A network is back, but that doesn't prove internet: try the server.
+      unawaited(_retry());
     }
+  }
+
+  void _setOnline(bool value) {
+    if (_disposed) return;
+    online.value = value;
+    if (value) {
+      _retryTimer?.cancel();
+      _retryTimer = null;
+    } else {
+      _retryTimer ??= Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _retry(),
+      );
+    }
+  }
+
+  /// Picks up where the lost connection left off.
+  Future<void> _retry() async {
+    final pending = _pendingUserId;
+    if (pending != null) return _loadFresh(pending);
+    if (_currentUser != null) return refresh();
+    try {
+      await remote?.ping();
+    } on TaskRemoteException {
+      // Still offline; the timer tries again.
+    }
+  }
+
+  Future<void> _signedIn(String userId) async {
+    // The profile row is created by a trigger; fall back if it's missing.
+    _currentUser =
+        memberById(userId) ?? Member(id: userId, fullName: '', email: '');
+    _currentTeamId = await _restoreTeam(userId);
     _starting = false;
     notifyListeners();
   }
@@ -232,6 +352,11 @@ class TaskStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The newest published version for [platform]; null in mock mode or when
+  /// nothing is published. Throws [TaskRemoteException] on failure.
+  Future<AppRelease?> latestRelease(String platform) async =>
+      remote?.latestRelease(platform);
+
   void _clear() {
     _currentUser = null;
     _currentTeamId = null;
@@ -241,8 +366,9 @@ class TaskStore extends ChangeNotifier {
     _tasks.clear();
   }
 
-  Future<void> _reload() async {
-    final s = await remote!.fetch();
+  Future<void> _reload() async => _apply(await remote!.fetch());
+
+  void _apply(RemoteSnapshot s) {
     _members
       ..clear()
       ..addAll(s.members);
@@ -274,10 +400,13 @@ class TaskStore extends ChangeNotifier {
   Future<void> refresh() async {
     if (remote == null || _currentUser == null) return;
     try {
-      await _reload();
+      final snapshot = await remote!.fetch();
+      if (_disposed) return;
+      _apply(snapshot);
       notifyListeners();
     } on TaskRemoteException catch (e) {
-      onError?.call(e.message);
+      // Offline is shown by the banner, not a snackbar per attempt.
+      if (!_disposed && !e.offline) onError?.call(e.message);
     }
   }
 
@@ -343,7 +472,12 @@ class TaskStore extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _slowStartTimer?.cancel();
     _authSub?.cancel();
+    _networkSub?.cancel();
+    _retryTimer?.cancel();
+    online.dispose();
     _refreshDebounce?.cancel();
     remote?.stopListening();
     themeMode.dispose();
@@ -748,9 +882,12 @@ class TaskStore extends ChangeNotifier {
     final r = remote;
     if (r == null) return;
     op(r).catchError((Object e) {
-      onError?.call(
-        e is TaskRemoteException ? e.message : 'Couldn\'t save that change.',
-      );
+      onError?.call(switch (e) {
+        TaskRemoteException(offline: true) =>
+          "You're offline, so that change wasn't saved.",
+        TaskRemoteException(:final message) => message,
+        _ => "Couldn't save that change.",
+      });
       refresh();
     });
   }

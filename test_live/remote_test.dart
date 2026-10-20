@@ -10,6 +10,7 @@ import 'package:prep_admin/data/supabase_task_remote.dart';
 import 'package:prep_admin/data/task_remote.dart';
 import 'package:prep_admin/data/task_store.dart';
 import 'package:prep_admin/models/task.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 SupabaseClient newClient() => SupabaseClient(
@@ -30,7 +31,170 @@ Future<void> waitFor(
   }
 }
 
+/// A server that takes [delay] to answer, to show the app doesn't wait on it.
+class SlowRemote extends SupabaseTaskRemote {
+  SlowRemote(super.db, this.delay);
+  final Duration delay;
+
+  @override
+  Future<RemoteSnapshot> fetch() async {
+    await Future<void>.delayed(delay);
+    return super.fetch();
+  }
+}
+
+/// A server that can be switched off, like losing the internet.
+class FlakyRemote extends SupabaseTaskRemote {
+  FlakyRemote(super.db);
+  bool down = true;
+
+  Future<void> _check() async {
+    if (down) {
+      onReachability?.call(false);
+      throw const TaskRemoteException('offline', offline: true);
+    }
+  }
+
+  @override
+  Future<RemoteSnapshot> fetch() async {
+    await _check();
+    return super.fetch();
+  }
+
+  @override
+  Future<void> ping() async {
+    await _check();
+    return super.ping();
+  }
+}
+
 void main() {
+  // Prefs live in memory here, as on a fresh install.
+  // ignore: invalid_use_of_visible_for_testing_member
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test(
+    'reopening shows the saved copy without waiting for the server',
+    () async {
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final email = 'qa.cache.$stamp@example.com';
+      // ignore: avoid_print
+      print('TEST ACCOUNT: $email');
+      final client = newClient();
+
+      final first = TaskStore.connected(
+        SupabaseTaskRemote(client),
+        watchNetwork: false,
+      );
+      await waitFor('start', () => !first.starting);
+      expect(
+        await first.signUp(
+          fullName: 'Cache QA',
+          email: email,
+          password: 'password-123',
+        ),
+        isNull,
+      );
+      await waitFor(
+        'loaded',
+        () => first.currentUser != null && !first.starting,
+      );
+      await first.createTeam(name: 'Cache Team', colorIndex: 1);
+      final task = first.addTask(
+        title: 'Saved for later',
+        scope: TaskScope.personal,
+      );
+      // Adding syncs in the background; reload until the server has it, which
+      // also saves the copy the next launch opens from.
+      for (var i = 0; i < 50; i++) {
+        await first.refresh();
+        if (first.taskById(task.id) != null) break;
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+      expect(first.taskById(task.id), isNotNull);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      first.dispose();
+
+      // Same session, next launch, with a server that takes 5 seconds.
+      final second = TaskStore.connected(
+        SlowRemote(client, const Duration(seconds: 5)),
+        watchNetwork: false,
+      );
+      await waitFor(
+        'opened from saved copy',
+        () => !second.starting,
+        timeout: const Duration(seconds: 2),
+      );
+      expect(second.me.fullName, 'Cache QA');
+      expect(second.currentTeam?.name, 'Cache Team');
+      expect(second.taskById(task.id)?.title, 'Saved for later');
+
+      // Signing out (here via deleting the account) forgets the saved copy.
+      await second.deleteAccount();
+      await waitFor('signed out', () => second.currentUser == null);
+      final remote = SupabaseTaskRemote(client);
+      for (var i = 0; i < 20; i++) {
+        if (await remote.cachedSnapshot() == null) break;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      expect(await remote.cachedSnapshot(), isNull);
+      second.dispose();
+    },
+    timeout: const Timeout(Duration(minutes: 1)),
+  );
+
+  test('latest release is readable without signing in', () async {
+    final release = await SupabaseTaskRemote(newClient())
+        .latestRelease('android');
+    expect(release?.version, matches(RegExp(r'^\d+(\.\d+)*$')));
+  });
+
+  test('offline: opens from the saved copy, then recovers', () async {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final email = 'qa.offline.$stamp@example.com';
+    // ignore: avoid_print
+    print('TEST ACCOUNT: $email');
+    final client = newClient();
+
+    final first = TaskStore.connected(
+      SupabaseTaskRemote(client),
+      watchNetwork: false,
+    );
+    await waitFor('start', () => !first.starting);
+    expect(
+      await first.signUp(
+        fullName: 'Offline QA',
+        email: email,
+        password: 'password-123',
+      ),
+      isNull,
+    );
+    await waitFor('loaded', () => first.currentUser != null && !first.starting);
+    await first.createTeam(name: 'Offline Team', colorIndex: 3);
+    await first.refresh();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    first.dispose();
+
+    final remote = FlakyRemote(client);
+    final app = TaskStore.connected(remote, watchNetwork: false);
+    await waitFor(
+      'home from saved copy',
+      () => !app.starting,
+      timeout: const Duration(seconds: 2),
+    );
+    expect(app.currentTeam?.name, 'Offline Team');
+    await waitFor('banner on', () => !app.online.value);
+
+    remote.down = false;
+    await app.refresh();
+    expect(app.online.value, isTrue);
+    expect(app.currentTeam?.name, 'Offline Team');
+
+    await app.deleteAccount();
+    await waitFor('signed out', () => app.currentUser == null);
+    app.dispose();
+  }, timeout: const Timeout(Duration(minutes: 1)));
+
   test('two people share a team through Supabase', () async {
     final stamp = DateTime.now().millisecondsSinceEpoch;
     final aliceEmail = 'qa.alice.$stamp@example.com';
@@ -39,8 +203,10 @@ void main() {
     print('TEST ACCOUNTS: $aliceEmail $bobEmail');
     final errors = <String>[];
 
-    final alice = TaskStore.connected(SupabaseTaskRemote(newClient()))
-      ..onError = errors.add;
+    final alice = TaskStore.connected(
+      SupabaseTaskRemote(newClient()),
+      watchNetwork: false,
+    )..onError = errors.add;
     await waitFor('alice start', () => !alice.starting);
     expect(
       await alice.signUp(
@@ -60,8 +226,10 @@ void main() {
     expect(alice.isOwner(team.id), isTrue);
     expect(team.joinCode, matches(RegExp(r'^[A-Z0-9]{6}$')));
 
-    final bob = TaskStore.connected(SupabaseTaskRemote(newClient()))
-      ..onError = errors.add;
+    final bob = TaskStore.connected(
+      SupabaseTaskRemote(newClient()),
+      watchNetwork: false,
+    )..onError = errors.add;
     await waitFor('bob start', () => !bob.starting);
     expect(
       await bob.signUp(
@@ -155,7 +323,10 @@ void main() {
     // Last one out: Bob's deletion takes the team with it.
     await bob.deleteAccount();
     await waitFor('bob signed out', () => bob.currentUser == null);
-    final check = TaskStore.connected(SupabaseTaskRemote(newClient()));
+    final check = TaskStore.connected(
+      SupabaseTaskRemote(newClient()),
+      watchNetwork: false,
+    );
     await waitFor('check start', () => !check.starting);
     expect(
       await check.signInWithEmail(bobEmail, 'password-123'),

@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config.dart';
 import '../models/member.dart';
 import '../models/task.dart';
 import '../models/team.dart';
@@ -8,10 +13,30 @@ import 'task_remote.dart';
 /// [TaskRemote] backed by the prep-admin Supabase project. Access rules live
 /// in the database (see `supabase/migrations`).
 class SupabaseTaskRemote implements TaskRemote {
-  SupabaseTaskRemote(this._db);
+  /// Uses a client that is already set up (tests).
+  SupabaseTaskRemote(SupabaseClient db) : _ready = Future.value(db) {
+    _client = db;
+  }
 
-  final SupabaseClient _db;
+  /// Starts Supabase in the background so the app can draw its first screen
+  /// straight away. Requests made before it's ready wait for it.
+  SupabaseTaskRemote.initialize()
+    : _ready = Supabase.initialize(
+        url: supabaseUrl,
+        publishableKey: supabasePublishableKey,
+      ).then((s) => s.client) {
+    // Registered before any request can await [_ready], so [_db] is set by
+    // the time they resume.
+    _ready.then((c) => _client = c, onError: (_) {});
+  }
+
+  final Future<SupabaseClient> _ready;
+  SupabaseClient? _client;
+  SupabaseClient get _db => _client!;
   RealtimeChannel? _channel;
+
+  @override
+  void Function(bool reachable)? onReachability;
 
   @override
   Stream<String?> get userIds => _userIds().distinct();
@@ -19,6 +44,7 @@ class SupabaseTaskRemote implements TaskRemote {
   // Starts with the current session so the app never waits on an initial
   // auth event that may not come.
   Stream<String?> _userIds() async* {
+    await _ready;
     yield _db.auth.currentUser?.id;
     yield* _db.auth.onAuthStateChange.map((s) => s.session?.user.id);
   }
@@ -57,20 +83,87 @@ class SupabaseTaskRemote implements TaskRemote {
   );
 
   @override
+  Future<AppRelease?> latestRelease(String platform) => _guard(() async {
+    final r = await _db
+        .from('app_versions')
+        .select('latest_version, download_url, notes')
+        .eq('platform', platform)
+        .maybeSingle();
+    if (r == null) return null;
+    return AppRelease(
+      version: r['latest_version'] as String,
+      downloadUrl: r['download_url'] as String?,
+      notes: r['notes'] as String? ?? '',
+    );
+  });
+
+  @override
   Future<RemoteSnapshot> fetch() => _guard(() async {
+    final userId = _db.auth.currentUser?.id;
     final rows = await Future.wait([
       _db.from('profiles').select('id, full_name, email, avatar_url'),
       _db.from('ic_teams').select(),
       _db.from('ic_team_members').select(),
       _db.from('ic_tasks').select(),
     ]);
-    return RemoteSnapshot(
-      members: rows[0].map(_member).toList(),
-      teams: rows[1].map(_team).toList(),
-      memberships: rows[2].map(_membership).toList(),
-      tasks: rows[3].map(_task).toList(),
-    );
+    if (userId != null) unawaited(_saveCache(userId, rows));
+    return _snapshot(rows);
   });
+
+  static const _cacheKey = 'snapshot_cache';
+
+  static RemoteSnapshot _snapshot(List<List<Map<String, dynamic>>> rows) =>
+      RemoteSnapshot(
+        members: rows[0].map(_member).toList(),
+        teams: rows[1].map(_team).toList(),
+        memberships: rows[2].map(_membership).toList(),
+        tasks: rows[3].map(_task).toList(),
+      );
+
+  Future<void> _saveCache(
+    String userId,
+    List<List<Map<String, dynamic>>> rows,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Signed out (or switched user) while loading: don't keep their data.
+      if (_db.auth.currentUser?.id != userId) return;
+      await prefs.setString(
+        _cacheKey,
+        jsonEncode({'user': userId, 'rows': rows}),
+      );
+    } catch (_) {
+      // Only speeds up the next launch.
+    }
+  }
+
+  @override
+  Future<({String userId, RemoteSnapshot snapshot})?> cachedSnapshot() async {
+    try {
+      final raw = (await SharedPreferences.getInstance()).getString(_cacheKey);
+      if (raw == null) return null;
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final snapshot = _snapshot([
+        for (final table in json['rows'] as List<dynamic>)
+          [for (final r in table as List<dynamic>) r as Map<String, dynamic>],
+      ]);
+      return (userId: json['user'] as String, snapshot: snapshot);
+    } catch (_) {
+      // Unreadable (e.g. saved by an older version): load from the server.
+      return null;
+    }
+  }
+
+  @override
+  Future<void> ping() =>
+      _guard(() => _db.from('app_versions').select('platform').limit(1));
+
+  @override
+  Future<void> clearCache() async {
+    try {
+      await (await SharedPreferences.getInstance()).remove(_cacheKey);
+    } catch (_) {}
+  }
 
   @override
   void listen(void Function() onChange) {
@@ -181,11 +274,19 @@ class SupabaseTaskRemote implements TaskRemote {
   Future<void> leaveTeam(String teamId) =>
       _guard(() => _db.rpc<void>('ic_leave_team', params: {'p_team': teamId}));
 
-  /// Turns backend errors into messages fit for a snackbar.
-  static Future<T> _guard<T>(Future<T> Function() op) async {
+  /// Waits for Supabase to start, reports whether the server answered, and
+  /// turns backend errors into messages fit for a snackbar.
+  Future<T> _guard<T>(Future<T> Function() op) async {
     try {
-      return await op();
+      await _ready;
+      final result = await op();
+      onReachability?.call(true);
+      return result;
+    } on AuthRetryableFetchException {
+      onReachability?.call(false);
+      throw _offline;
     } on AuthException catch (e) {
+      onReachability?.call(true);
       throw TaskRemoteException(switch (e.code) {
         'invalid_credentials' => 'Wrong email or password.',
         'user_already_exists' ||
@@ -197,15 +298,20 @@ class SupabaseTaskRemote implements TaskRemote {
         _ => e.message,
       });
     } on PostgrestException catch (e) {
+      onReachability?.call(true);
       throw TaskRemoteException(e.message);
     } on TaskRemoteException {
       rethrow;
     } catch (_) {
-      throw const TaskRemoteException(
-        "Couldn't reach the server. Check your connection.",
-      );
+      onReachability?.call(false);
+      throw _offline;
     }
   }
+
+  static const _offline = TaskRemoteException(
+    "Couldn't reach the server. Check your connection.",
+    offline: true,
+  );
 }
 
 // Row mapping ------------------------------------------------------------------
