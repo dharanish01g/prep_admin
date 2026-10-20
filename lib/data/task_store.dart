@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/member.dart';
@@ -99,6 +99,7 @@ class TaskStore extends ChangeNotifier {
 
   void _start() {
     _starting = true;
+    unawaited(_loadTheme());
     _authSub = remote!.userIds.listen(_onUser);
   }
 
@@ -209,6 +210,28 @@ class TaskStore extends ChangeNotifier {
     await signOut();
   }
 
+  /// Renames me. Throws [TaskRemoteException] on failure.
+  Future<void> updateName(String fullName) async {
+    final name = fullName.trim();
+    if (name.isEmpty) throw const TaskRemoteException('Enter your name.');
+    final r = remote;
+    if (r != null) {
+      await r.updateName(name);
+      await _reload();
+      notifyListeners();
+      return;
+    }
+    final renamed = Member(
+      id: me.id,
+      fullName: name,
+      email: me.email,
+      avatarUrl: me.avatarUrl,
+    );
+    _members[_members.indexWhere((m) => m.id == me.id)] = renamed;
+    _currentUser = renamed;
+    notifyListeners();
+  }
+
   void _clear() {
     _currentUser = null;
     _currentTeamId = null;
@@ -258,6 +281,38 @@ class TaskStore extends ChangeNotifier {
     }
   }
 
+  // Theme --------------------------------------------------------------------
+
+  /// Light, dark or follow the phone. Kept on this device, not per account.
+  final themeMode = ValueNotifier(ThemeMode.system);
+
+  static const _themeKey = 'theme_mode';
+
+  Future<void> _loadTheme() async {
+    try {
+      final name = (await SharedPreferences.getInstance()).getString(_themeKey);
+      themeMode.value = ThemeMode.values.asNameMap()[name] ?? ThemeMode.system;
+    } catch (_) {}
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    themeMode.value = mode;
+    notifyListeners();
+    if (remote == null) return;
+    unawaited(_saveTheme(mode));
+  }
+
+  static Future<void> _saveTheme(ThemeMode mode) async {
+    try {
+      await (await SharedPreferences.getInstance()).setString(
+        _themeKey,
+        mode.name,
+      );
+    } catch (_) {
+      // Only a preference; the app falls back to the phone's setting.
+    }
+  }
+
   static String _prefsKey(String userId) => 'last_team_$userId';
 
   Future<String?> _restoreTeam(String userId) async {
@@ -291,6 +346,7 @@ class TaskStore extends ChangeNotifier {
     _authSub?.cancel();
     _refreshDebounce?.cancel();
     remote?.stopListening();
+    themeMode.dispose();
     super.dispose();
   }
 

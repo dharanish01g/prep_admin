@@ -54,14 +54,17 @@ class _PrepAdminAppState extends State<PrepAdminApp> {
   Widget build(BuildContext context) {
     return StoreScope(
       store: widget.store,
-      child: MaterialApp(
-        title: 'PrepWisely Team',
-        debugShowCheckedModeBanner: false,
-        scaffoldMessengerKey: _messenger,
-        theme: buildAppTheme(Brightness.light),
-        darkTheme: buildAppTheme(Brightness.dark),
-        themeMode: widget.themeMode ?? ThemeMode.system,
-        home: const _Root(),
+      child: ValueListenableBuilder(
+        valueListenable: widget.store.themeMode,
+        builder: (context, themeMode, _) => MaterialApp(
+          title: 'PrepWisely Team',
+          debugShowCheckedModeBanner: false,
+          scaffoldMessengerKey: _messenger,
+          theme: buildAppTheme(Brightness.light),
+          darkTheme: buildAppTheme(Brightness.dark),
+          themeMode: widget.themeMode ?? themeMode,
+          home: const _Root(),
+        ),
       ),
     );
   }

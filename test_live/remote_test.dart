@@ -87,6 +87,14 @@ void main() {
     // Alice hears about Bob live.
     await waitFor('alice sees bob', () => alice.members.length == 2);
 
+    // Renaming in Settings reaches teammates live.
+    await alice.updateName('Alice Renamed');
+    expect(alice.me.fullName, 'Alice Renamed');
+    await waitFor(
+      'bob sees the new name',
+      () => bob.memberById(alice.me.id)?.fullName == 'Alice Renamed',
+    );
+
     final task = alice.addTask(
       title: 'Prepare the demo',
       scope: TaskScope.common,

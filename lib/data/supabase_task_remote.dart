@@ -49,6 +49,14 @@ class SupabaseTaskRemote implements TaskRemote {
   });
 
   @override
+  Future<void> updateName(String fullName) => _guard(
+    () => _db
+        .from('profiles')
+        .update({'full_name': fullName})
+        .eq('id', _db.auth.currentUser!.id),
+  );
+
+  @override
   Future<RemoteSnapshot> fetch() => _guard(() async {
     final rows = await Future.wait([
       _db.from('profiles').select('id, full_name, email, avatar_url'),
@@ -68,7 +76,12 @@ class SupabaseTaskRemote implements TaskRemote {
   void listen(void Function() onChange) {
     stopListening();
     final channel = _db.channel('ic-changes');
-    for (final table in ['ic_tasks', 'ic_team_members', 'ic_teams']) {
+    for (final table in [
+      'ic_tasks',
+      'ic_team_members',
+      'ic_teams',
+      'profiles',
+    ]) {
       channel.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',

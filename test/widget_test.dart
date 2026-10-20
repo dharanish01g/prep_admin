@@ -20,6 +20,13 @@ Future<TaskStore> pumpSignedIn(WidgetTester tester) async {
   return store;
 }
 
+Future<void> openSettings(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Account'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Settings'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('unknown email is rejected', (tester) async {
     await tester.pumpWidget(PrepAdminApp(store: TaskStore.mock()));
@@ -233,8 +240,8 @@ void main() {
     final me = store.me;
     final myTeams = store.teams.map((t) => t.id).toList();
 
-    await tester.tap(find.byTooltip('Account'));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
+    await tester.ensureVisible(find.text('Delete account'));
     await tester.tap(find.text('Delete account'));
     await tester.pumpAndSettle();
 
@@ -251,5 +258,52 @@ void main() {
     for (final id in myTeams) {
       expect(store.membership(id, me.id), isNull);
     }
+  });
+
+  testWidgets('the account menu only has settings and sign out', (
+    tester,
+  ) async {
+    await pumpSignedIn(tester);
+    await tester.tap(find.byTooltip('Account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.text('Delete account'), findsNothing);
+    expect(find.text('Privacy policy'), findsNothing);
+  });
+
+  testWidgets('renaming in settings updates my name', (tester) async {
+    final store = await pumpSignedIn(tester);
+    await openSettings(tester);
+
+    await tester.tap(find.text('Name'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '   ');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter your name.'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '  Arun Kumar ');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(store.me.fullName, 'Arun Kumar');
+    expect(store.memberById(store.me.id)!.fullName, 'Arun Kumar');
+    expect(find.text('Arun Kumar'), findsWidgets);
+  });
+
+  testWidgets('choosing a theme in settings applies it', (tester) async {
+    final store = await pumpSignedIn(tester);
+    await openSettings(tester);
+    expect(store.themeMode.value, ThemeMode.system);
+
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    expect(store.themeMode.value, ThemeMode.dark);
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+    expect(
+      Theme.of(tester.element(find.text('Settings').first)).brightness,
+      Brightness.dark,
+    );
   });
 }
