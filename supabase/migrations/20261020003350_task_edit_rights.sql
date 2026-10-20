@@ -20,7 +20,8 @@ using (
 
 -- Same as before, plus: an assignee's update may change the status only.
 -- Team functions (security definer, so current_user isn't 'authenticated')
--- still unassign tasks when someone leaves.
+-- still unassign tasks when someone leaves, and deleting a profile still
+-- clears created_by.
 create or replace function private.ic_tasks_before_write()
 returns trigger
 language plpgsql
@@ -43,7 +44,11 @@ begin
     then
       raise exception 'Only the task''s creator can edit it';
     end if;
-    new.created_by := old.created_by;
+    -- The creator is fixed, but may be cleared: deleting their profile sets
+    -- it to null (on delete set null), which must not be undone here.
+    if new.created_by is not null then
+      new.created_by := old.created_by;
+    end if;
     new.created_at := old.created_at;
     new.updated_at := now();
   end if;

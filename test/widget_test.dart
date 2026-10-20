@@ -225,4 +225,31 @@ void main() {
     store.updateTask(t.copyWith(scope: TaskScope.personal));
     expect(store.taskById(t.id)!.assignedTo, t.createdBy);
   });
+
+  testWidgets('deleting the account signs out and removes the member', (
+    tester,
+  ) async {
+    final store = await pumpSignedIn(tester);
+    final me = store.me;
+    final myTeams = store.teams.map((t) => t.id).toList();
+
+    await tester.tap(find.byTooltip('Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account'));
+    await tester.pumpAndSettle();
+
+    final delete = find.widgetWithText(FilledButton, 'Delete account');
+    expect(tester.widget<FilledButton>(delete).onPressed, isNull);
+    await tester.enterText(find.byType(TextField).last, 'delete');
+    await tester.pump();
+    await tester.tap(delete);
+    await tester.pumpAndSettle();
+
+    expect(store.currentUser, isNull);
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(store.memberByEmail(me.email), isNull);
+    for (final id in myTeams) {
+      expect(store.membership(id, me.id), isNull);
+    }
+  });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
 import 'task_badges.dart';
@@ -412,4 +413,19 @@ class ButtonSpinner extends StatelessWidget {
 
 void showErrorSnackBar(BuildContext context, Object error) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$error')));
+}
+
+/// Opens [url] in the browser, or says why it couldn't.
+Future<void> openLink(BuildContext context, String url) async {
+  final messenger = ScaffoldMessenger.of(context);
+  var opened = false;
+  try {
+    opened = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+  } catch (_) {}
+  if (!opened) {
+    messenger.showSnackBar(SnackBar(content: Text("Couldn't open $url")));
+  }
 }

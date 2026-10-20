@@ -1,0 +1,27 @@
+PrepWisely Team: additional permission under GNU GPL version 3, section 7
+
+Copyright (C) 2026 Dharani Gowtham
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, version 3 (see LICENSE), with the following additional
+permission.
+
+As an additional permission under section 7 of the GNU General Public
+License version 3, you may distribute this program, or a work based on it,
+in object code form through an app store or similar distribution service
+(such as Apple's App Store or Google Play), even if that service's terms of
+use or usage rules place restrictions on recipients that the GPL would
+otherwise not allow (for example limits on the number of devices, or
+technical measures such as code signing or DRM applied by the service),
+provided that:
+
+  a) you make the Corresponding Source of the version you distribute
+     available to everyone, free of charge, under the terms of the GPL
+     version 3 with this additional permission; and
+
+  b) you do not add any such restrictions yourself beyond those the
+     service requires.
+
+You may remove this additional permission from your copy, or from works
+based on this program that you distribute, as section 7 of the GPL allows.

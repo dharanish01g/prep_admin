@@ -49,3 +49,6 @@ app.*.map.json
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Screenshot dummy data: names real users, never publish.
+/supabase/screenshots/

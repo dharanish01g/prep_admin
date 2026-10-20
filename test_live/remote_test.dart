@@ -1,7 +1,8 @@
 // Runs the real app store against the live prep-admin Supabase project with
 // two throwaway accounts. Not part of `flutter test`; run it on purpose:
 //   flutter test test_live/remote_test.dart
-// It prints the accounts it made so they can be deleted afterwards.
+// Both accounts delete themselves at the end; if a run fails midway, it
+// prints the accounts it made so they can be deleted by hand.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prep_admin/config.dart';
@@ -104,6 +105,15 @@ void main() {
       () => alice.taskById(task.id)?.completedAt != null,
     );
 
+    // Bob is only the assignee: the server refuses anything but status.
+    bob.updateTask(bob.taskById(task.id)!.copyWith(title: 'Renamed by Bob'));
+    await waitFor('bob is refused', () => errors.isNotEmpty);
+    expect(errors.removeLast(), contains('creator'));
+    await waitFor(
+      'title restored',
+      () => bob.taskById(task.id)?.title == 'Prepare the demo',
+    );
+
     // Only the owner can make a new code.
     await expectLater(
       SupabaseTaskRemote(newClient()).regenerateJoinCode(team.id),
@@ -118,12 +128,31 @@ void main() {
     expect(alice.currentTeam, isNull);
     await waitFor('bob is owner', () => bob.isOwner(team.id));
 
-    await bob.leaveTeam(team.id);
-    expect(bob.currentTeam, isNull);
-
-    await alice.signOut();
+    // Alice comes back, then deletes her account: her common task stays
+    // with the team and she can no longer sign in.
+    await alice.joinTeam(bob.currentTeam!.joinCode);
+    await waitFor('bob sees alice back', () => bob.members.length == 2);
+    await alice.deleteAccount();
     await waitFor('alice signed out', () => alice.currentUser == null);
-    await bob.signOut();
+    await waitFor('alice gone for bob', () => bob.members.length == 1);
+    await waitFor(
+      'task kept, creator cleared',
+      () => bob.taskById(task.id)?.createdBy == '',
+    );
+    expect(
+      await alice.signInWithEmail(aliceEmail, 'password-123'),
+      'Wrong email or password.',
+    );
+
+    // Last one out: Bob's deletion takes the team with it.
+    await bob.deleteAccount();
+    await waitFor('bob signed out', () => bob.currentUser == null);
+    final check = TaskStore.connected(SupabaseTaskRemote(newClient()));
+    await waitFor('check start', () => !check.starting);
+    expect(
+      await check.signInWithEmail(bobEmail, 'password-123'),
+      'Wrong email or password.',
+    );
 
     expect(errors, isEmpty);
   }, timeout: const Timeout(Duration(minutes: 2)));

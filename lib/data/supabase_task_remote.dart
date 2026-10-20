@@ -40,6 +40,14 @@ class SupabaseTaskRemote implements TaskRemote {
   @override
   Future<void> signOut() => _guard(() => _db.auth.signOut());
 
+  // The login is gone (and its sessions with it), so only the local session
+  // is left to clear.
+  @override
+  Future<void> deleteAccount() => _guard(() async {
+    await _db.rpc<void>('ic_delete_account');
+    await _db.auth.signOut(scope: SignOutScope.local);
+  });
+
   @override
   Future<RemoteSnapshot> fetch() => _guard(() async {
     final rows = await Future.wait([

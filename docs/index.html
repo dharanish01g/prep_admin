@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PrepWisely Team</title>
+  <meta name="description" content="PrepWisely Team is a simple reminder app for small teams of 4–5. Remind a colleague what needs doing and when, and see when it's done. No boards, no setup, nothing to learn.">
+  <meta property="og:title" content="PrepWisely Team">
+  <meta property="og:description" content="Simple reminders for small teams. Not another Asana or Trello.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --canvas: #f5f6fa;
+      --surface: #ffffff;
+      --surface-muted: #eef0f5;
+      --border: #e6e8ef;
+      --text: #14151a;
+      --text-2: #5d6170;
+      --muted: #9a9ead;
+      --brand: #5b4bf5;
+      --brand-soft: #eeebff;
+      --grad: linear-gradient(135deg, #6d5dfc, #8e54e9);
+      --success: #12b76a;
+      --success-soft: #e5f7ee;
+      --warning: #f08c00;
+      --warning-soft: #fef3e2;
+      --info: #2e90fa;
+      --info-soft: #e6f1fe;
+      --danger: #f04438;
+      --shadow: 0 12px 30px rgba(20, 21, 26, 0.07);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --canvas: #0e0f13;
+        --surface: #17181d;
+        --surface-muted: #21232a;
+        --border: #2a2c35;
+        --text: #f3f4f7;
+        --text-2: #a5a9b8;
+        --muted: #6b6f7e;
+        --brand: #8b7dff;
+        --brand-soft: #262046;
+        --grad: linear-gradient(135deg, #5b4bf5, #7b3fd9);
+        --success: #32d583;
+        --success-soft: #10291e;
+        --warning: #fdb022;
+        --warning-soft: #2e2210;
+        --info: #53b1fd;
+        --info-soft: #102538;
+        --danger: #f97066;
+        --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--text);
+      font: 16px/1.6 "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--brand); }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+    @media (max-width: 600px) { .wrap { padding: 0 16px; } }
+
+    /* Hero */
+    .hero {
+      background: var(--grad);
+      color: #fff;
+      border-radius: 0 0 40px 40px;
+      overflow: hidden;
+    }
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -0.3px; color: #fff; text-decoration: none; }
+    .logo-mark {
+      width: 36px; height: 36px; border-radius: 11px;
+      background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3);
+      display: grid; place-items: center;
+    }
+    nav .links { display: flex; gap: 22px; }
+    nav .links a { color: rgba(255,255,255,0.85); text-decoration: none; font-weight: 600; font-size: 15px; }
+    nav .links a:hover { color: #fff; }
+    @media (max-width: 600px) { nav .links { display: none; } }
+
+    .hero-grid {
+      display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center;
+      padding: 48px 0 0;
+    }
+    @media (max-width: 860px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 40px; padding-top: 24px; text-align: center; }
+    }
+    .eyebrow {
+      display: inline-block; padding: 6px 12px; border-radius: 999px;
+      background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.25);
+      font-size: 13px; font-weight: 700; letter-spacing: 0.2px;
+    }
+    h1 {
+      font-size: clamp(2.2rem, 5vw, 3.4rem); line-height: 1.08; letter-spacing: -1.4px;
+      margin: 18px 0 16px; font-weight: 800;
+    }
+    .lede { font-size: 1.15rem; color: rgba(255,255,255,0.88); max-width: 34em; margin: 0 0 28px; }
+    @media (max-width: 860px) { .lede { margin-left: auto; margin-right: auto; } }
+    .cta { display: flex; gap: 12px; flex-wrap: wrap; padding-bottom: 56px; }
+    @media (max-width: 860px) { .cta { justify-content: center; } }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 20px; border-radius: 14px; font-weight: 700; font-size: 15px; text-decoration: none;
+    }
+    .btn-light { background: #fff; color: #4a3bd6; }
+    .btn-ghost { color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+    .soon { font-size: 13.5px; color: rgba(255,255,255,0.8); margin: -40px 0 56px; }
+
+    /* Phones: real app screenshots (600 × 1305, 2× for ~300px wide) */
+    .phone-col { display: flex; justify-content: center; align-self: end; }
+    .phone {
+      width: 300px; max-width: 100%;
+      background: #121218; border: 10px solid #121218;
+      border-radius: 44px; overflow: hidden;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.25);
+    }
+    .phone img { display: block; width: 100%; height: auto; border-radius: 34px; }
+    /* In the hero the phone rises out of the bottom edge, cropped. */
+    .hero .phone { height: 560px; border-bottom: 0; border-radius: 44px 44px 0 0; }
+    .hero .phone img { border-radius: 34px 34px 0 0; }
+    @media (max-width: 600px) { .hero .phone { height: 480px; } }
+
+    .shots {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+      margin-top: 40px; justify-items: center;
+    }
+    .shots figure { margin: 0; width: 100%; max-width: 300px; }
+    .shots .phone { width: 100%; box-shadow: var(--shadow); }
+    .shots figcaption { margin-top: 18px; text-align: center; }
+    .shots figcaption b { display: block; font-size: 1.05rem; }
+    .shots figcaption span { color: var(--text-2); font-size: 0.95rem; }
+    /* Phones side by side don't fit: swipe through them instead. */
+    @media (max-width: 860px) {
+      .shots {
+        display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory;
+        margin-left: -24px; margin-right: -24px; padding: 0 24px 12px;
+        scrollbar-width: none;
+      }
+      .shots::-webkit-scrollbar { display: none; }
+      .shots figure { flex: 0 0 240px; scroll-snap-align: center; }
+    }
+    @media (max-width: 600px) {
+      .shots { margin-left: -16px; margin-right: -16px; padding: 0 16px 12px; }
+    }
+
+    /* Sections */
+    section { padding: 88px 0 0; }
+    @media (max-width: 600px) { section { padding-top: 64px; } }
+    .kicker { color: var(--brand); font-weight: 800; font-size: 13px; letter-spacing: 0.8px; text-transform: uppercase; }
+    h2 { font-size: clamp(1.7rem, 3.4vw, 2.3rem); line-height: 1.15; letter-spacing: -0.8px; margin: 8px 0 12px; font-weight: 800; }
+    .sub { color: var(--text-2); font-size: 1.05rem; max-width: 40em; margin: 0; }
+
+    .problem {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px;
+    }
+    @media (max-width: 760px) { .problem { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 22px;
+      padding: 24px; box-shadow: var(--shadow);
+    }
+    .card h3 { margin: 0 0 8px; font-size: 1.1rem; letter-spacing: -0.2px; }
+    .card p { margin: 0; color: var(--text-2); }
+    .card ul { margin: 10px 0 0; padding-left: 20px; color: var(--text-2); }
+    .card li { margin: 4px 0; }
+    .card.before h3 { color: var(--text-2); }
+    .card.after { border-color: var(--brand); }
+
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 32px; counter-reset: s; }
+    @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+    .step .num {
+      width: 40px; height: 40px; border-radius: 12px; background: var(--grad); color: #fff;
+      display: grid; place-items: center; font-weight: 800; margin-bottom: 16px;
+    }
+    .code {
+      display: inline-flex; gap: 4px; margin-top: 14px;
+    }
+    .code span {
+      width: 28px; height: 34px; border-radius: 8px; background: var(--brand-soft); color: var(--brand);
+      display: grid; place-items: center; font-weight: 800; font-size: 15px;
+    }
+
+    .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 32px; }
+    @media (max-width: 960px) { .features { grid-template-columns: 1fr 1fr; } }
+    .leftout { margin-top: 16px; box-shadow: none; background: transparent; border-style: dashed; }
+    .leftout .who { margin: 14px 0; }
+    .leftout .pill { text-decoration: line-through; color: var(--muted); font-size: 14px; padding: 7px 13px; }
+    @media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+    .icon {
+      width: 44px; height: 44px; border-radius: 13px; background: var(--brand-soft); color: var(--brand);
+      display: grid; place-items: center; margin-bottom: 14px;
+    }
+    .icon svg { width: 22px; height: 22px; }
+
+    .who { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+    .pill {
+      padding: 10px 16px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border);
+      font-weight: 600; font-size: 15px;
+    }
+
+    .trust {
+      display: grid; grid-template-columns: auto 1fr auto; gap: 24px; align-items: center;
+    }
+    @media (max-width: 760px) { .trust { grid-template-columns: 1fr; } }
+    .trust .icon { margin: 0; width: 56px; height: 56px; }
+    .trust h3 { margin: 0 0 6px; }
+    .trust .links { display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+
+    .final {
+      margin-top: 88px; background: var(--grad); color: #fff; border-radius: 28px;
+      padding: 48px 32px; text-align: center;
+    }
+    @media (max-width: 600px) { .final { margin-top: 64px; padding: 36px 20px; } }
+    .final h2 { color: #fff; margin-top: 0; }
+    .final p { color: rgba(255,255,255,0.88); margin: 0 auto 24px; max-width: 32em; }
+
+    footer {
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+      padding: 32px 0 40px; color: var(--muted); font-size: 14px;
+    }
+    footer a { color: var(--text-2); text-decoration: none; margin-left: 18px; }
+    footer a:first-child { margin-left: 0; }
+    footer a:hover { color: var(--brand); }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <nav>
+      <a class="logo" href="#">
+        <span class="logo-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>
+        </span>
+        PrepWisely Team
+      </a>
+      <div class="links">
+        <a href="#how">How it works</a>
+        <a href="#features">What's inside</a>
+        <a href="privacy.html">Privacy</a>
+      </div>
+    </nav>
+
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow">For small teams of 4–5 people</span>
+        <h1>Simple reminders for your team.</h1>
+        <p class="lede">Not another Asana or Trello. Just a quick way to remind a colleague
+        what needs doing and by when, and to see when it's done. Takes ten seconds,
+        and there's nothing to learn.</p>
+        <div class="cta">
+          <a class="btn btn-light" href="#how">See how it works</a>
+          <a class="btn btn-ghost" href="mailto:dharanigowthamsampath@gmail.com?subject=PrepWisely%20Team%20early%20access">Get early access</a>
+        </div>
+        <p class="soon">Coming soon to Google Play and the App Store.</p>
+      </div>
+
+      <div class="phone-col">
+        <div class="phone">
+          <img src="img/my-tasks.webp" width="600" height="1305"
+            alt="My Tasks screen: 7 tasks open, 2 due today and 1 overdue, with a list of personal to-dos">
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <div class="kicker">The idea</div>
+    <h2>To-do apps grew into big tools. Small teams didn't.</h2>
+    <p class="sub">Most task apps are now built for big companies, with boards,
+    sprints, workflows, custom fields and integrations. A team of four or five
+    doesn't need any of that. You just need to say "Priya, please send the
+    invoice by Friday", not have it get lost in WhatsApp, and know when it's
+    done. That's all this app does.</p>
+
+    <div class="problem">
+      <div class="card before">
+        <h3>Big project tools</h3>
+        <ul>
+          <li>Boards, sprints, workflows and custom fields</li>
+          <li>Hours of setup before anyone adds a task</li>
+          <li>Training the team to use it, and then nobody does</li>
+          <li>Per-seat plans priced for large companies</li>
+        </ul>
+      </div>
+      <div class="card after">
+        <h3>PrepWisely Team</h3>
+        <ul>
+          <li>Type what needs doing, pick a colleague, add a date. Done.</li>
+          <li>They see it straight away on their phone</li>
+          <li>You see it ticked off when it's finished</li>
+          <li>Your own reminders sit in the same simple list</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="kicker">How it works</div>
+    <h2>Set up in a minute. Used in seconds.</h2>
+    <p class="sub">No setup and no admin console. One person creates the team and
+    the others join with a code.</p>
+
+    <div class="steps">
+      <div class="card step">
+        <div class="num">1</div>
+        <h3>Create a team</h3>
+        <p>Sign up with your email and give your team a name.</p>
+      </div>
+      <div class="card step">
+        <div class="num">2</div>
+        <h3>Share the invite code</h3>
+        <p>Send the six-letter code to your colleagues on WhatsApp, and
+        they're in.</p>
+        <div class="code" aria-label="Example code K7PQ4M"><span>K</span><span>7</span><span>P</span><span>Q</span><span>4</span><span>M</span></div>
+      </div>
+      <div class="card step">
+        <div class="num">3</div>
+        <h3>Remind and relax</h3>
+        <p>"Send the invoice, Friday, Priya." They get it, they tick it off, and
+        you see that it's done.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="kicker">A look inside</div>
+    <h2>Simple enough to use without a tour.</h2>
+    <p class="sub">Your list, the team's list, and who's on the team. Nothing
+    hidden in menus.</p>
+
+    <div class="shots">
+      <figure>
+        <div class="phone"><img src="img/new-task.webp" width="600" height="1305" loading="lazy"
+          alt="New task form: a title and note, a teammate picked under Assign to, priority and due date"></div>
+        <figcaption><b>Remind someone</b><span>Write it, pick who, add a date.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="img/board.webp" width="600" height="1305" loading="lazy"
+          alt="Board screen: everyone's open tasks, filterable by person, with overdue and due-today tasks marked"></div>
+        <figcaption><b>See what's open</b><span>Everyone's tasks, overdue first.</span></figcaption>
+      </figure>
+      <figure>
+        <div class="phone"><img src="img/team.webp" width="600" height="1305" loading="lazy"
+          alt="Team screen: open, in progress and overdue counts, and each member's progress"></div>
+        <figcaption><b>Know who's on what</b><span>Each person's progress at a glance.</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="kicker">What's inside</div>
+    <h2>Just the essentials.</h2>
+    <p class="sub">Four things, done well. If you can send a WhatsApp message, you
+    can use this.</p>
+
+    <div class="features">
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+        <h3>Remind a colleague</h3>
+        <p>Write what needs doing, pick who should do it, and they have it. Or leave
+        it open for whoever's free.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+        <h3>By when</h3>
+        <p>Add a date and mark it urgent if it is. Things due today and overdue
+        stand out on everyone's list.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg></div>
+        <h3>See when it's done</h3>
+        <p>When your colleague ticks it off, you see it right away. No chasing, no
+        "did you do that?" messages.</p>
+      </div>
+      <div class="card">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></div>
+        <h3>Your own reminders</h3>
+        <p>Private to-dos just for you, in the same list as what your team asked
+        you to do.</p>
+      </div>
+    </div>
+
+    <div class="card leftout">
+      <h3>What we left out, on purpose</h3>
+      <div class="who">
+        <span class="pill">Kanban boards</span>
+        <span class="pill">Sprints</span>
+        <span class="pill">Gantt charts</span>
+        <span class="pill">Custom fields</span>
+        <span class="pill">Workflows</span>
+        <span class="pill">Time tracking</span>
+        <span class="pill">Integrations</span>
+        <span class="pill">Admin settings</span>
+      </div>
+      <p>If your team needs these, a big tool is the right choice. If you just need
+      reminders that don't get lost, this is it.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="kicker">Who it's for</div>
+    <h2>Made for teams of 4–5.</h2>
+    <p class="sub">Small enough that everyone knows each other. Busy enough that
+    things slip through the WhatsApp group.</p>
+    <div class="who">
+      <span class="pill">Small offices</span>
+      <span class="pill">Shops and clinics</span>
+      <span class="pill">Family businesses</span>
+      <span class="pill">Small studios and agencies</span>
+      <span class="pill">Founding teams</span>
+      <span class="pill">College project groups</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="card trust">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+      <div>
+        <h3>Your data stays yours</h3>
+        <p>No ads, no tracking and no selling of data. Only members of a team can see
+        what's inside it, and you can delete your account at any time from inside
+        the app.</p>
+      </div>
+      <div class="links">
+        <a href="privacy.html">Privacy policy</a>
+        <a href="delete-account.html">Delete your account</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="final">
+    <h2>Coming soon to Android and iPhone.</h2>
+    <p>Want to try it with your team before launch? Drop a line and we'll send you
+    early access.</p>
+    <a class="btn btn-light" href="mailto:dharanigowthamsampath@gmail.com?subject=PrepWisely%20Team%20early%20access">Get early access</a>
+  </div>
+
+  <footer>
+    <span>© 2026 PrepWisely Team</span>
+    <span>
+      <a href="privacy.html">Privacy</a>
+      <a href="delete-account.html">Delete account</a>
+      <a href="mailto:dharanigowthamsampath@gmail.com">Contact</a>
+    </span>
+  </footer>
+</main>
+
+</body>
+</html>

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../config.dart';
 import '../data/task_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/member_avatar.dart';
+import '../widgets/ui.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -302,6 +304,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: () => openLink(context, privacyPolicyUrl),
+                          style: TextButton.styleFrom(
+                            foregroundColor: c.textMuted,
+                          ),
+                          child: const Text('Privacy policy'),
                         ),
                         if (store.isMock) ...[
                           const SizedBox(height: 28),

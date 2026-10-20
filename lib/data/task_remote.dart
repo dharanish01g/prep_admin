@@ -36,6 +36,9 @@ abstract class TaskRemote {
   Future<void> signUp(String fullName, String email, String password);
   Future<void> signOut();
 
+  /// Leaves every team, deletes the account and signs out.
+  Future<void> deleteAccount();
+
   Future<RemoteSnapshot> fetch();
 
   /// Calls [onChange] whenever data the user can see changes elsewhere.

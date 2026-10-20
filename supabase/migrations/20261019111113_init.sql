@@ -1,5 +1,5 @@
 -- prep_admin: teams (separate workspaces) with personal and common tasks.
--- Sign-in is Google only; a profile row is created for every new auth user.
+-- A profile row is created for every new auth user.
 
 -- Helpers live in `private`, which is not exposed through the API.
 create schema if not exists private;

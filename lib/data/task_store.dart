@@ -194,6 +194,21 @@ class TaskStore extends ChangeNotifier {
     }
   }
 
+  /// Leaves every team (as [leaveTeam] does), deletes the account and signs
+  /// out. Throws [TaskRemoteException] on failure.
+  Future<void> deleteAccount() async {
+    final r = remote;
+    if (r != null) {
+      await r.deleteAccount();
+      return;
+    }
+    for (final team in teams) {
+      await leaveTeam(team.id);
+    }
+    _members.removeWhere((m) => m.id == me.id);
+    await signOut();
+  }
+
   void _clear() {
     _currentUser = null;
     _currentTeamId = null;
