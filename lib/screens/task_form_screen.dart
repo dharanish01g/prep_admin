@@ -51,6 +51,11 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
   bool get _isEdit => widget.taskId != null;
 
+  /// Deleted on another phone while being edited: saving keeps the edit as
+  /// a new task instead of losing it.
+  bool _deletedElsewhere(TaskStore store) =>
+      _editing != null && store.taskById(_editing!.id) == null;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -97,7 +102,8 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     final title = _title.text.trim();
     final description = _description.text.trim();
     final editing = _editing;
-    if (editing != null) {
+    final deleted = _deletedElsewhere(store);
+    if (editing != null && !deleted) {
       store.updateTask(
         editing.copyWith(
           title: title,
@@ -118,6 +124,10 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         dueDate: _dueDate,
       );
     }
+    if (deleted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Saved as a new task')));
+    }
     Navigator.of(context).pop();
   }
 
@@ -126,6 +136,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     final store = StoreScope.of(context);
     final c = context.colors;
     final team = store.teamById(_editing?.teamId) ?? store.currentTeam!;
+    final deleted = _deletedElsewhere(store);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final quickDates = [
@@ -166,7 +177,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                 minimumSize: const Size(0, 40),
                 padding: const EdgeInsets.symmetric(horizontal: 20),
               ),
-              child: const Text('Save'),
+              child: Text(deleted ? 'Save as new' : 'Save'),
             ),
           ),
         ],
@@ -176,6 +187,38 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
+            if (deleted) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: c.warningSoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 18,
+                      color: c.warning,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Someone deleted this task. Your changes are '
+                        'still here: save them as a new task, or close '
+                        'to drop them.',
+                        style: TextStyle(
+                          color: c.warning,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             // Only the creator may make a task personal: an owner looking
             // after a departed member's task keeps it common.
             if (_editing == null || _editing!.createdBy == store.me.id)

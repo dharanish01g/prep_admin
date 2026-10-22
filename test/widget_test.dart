@@ -6,6 +6,7 @@ import 'package:prep_admin/data/task_store.dart';
 import 'package:prep_admin/main.dart';
 import 'package:prep_admin/models/task.dart';
 import 'package:prep_admin/models/team.dart';
+import 'package:prep_admin/screens/task_form_screen.dart';
 
 Future<TaskStore> pumpSignedIn(WidgetTester tester) async {
   tester.view.physicalSize = const Size(390, 844) * 3;
@@ -422,5 +423,36 @@ void main() {
     store.syncing.value = false;
     await tester.pumpAndSettle();
     expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
+  testWidgets('edit survives the task being deleted on another phone', (
+    tester,
+  ) async {
+    final store = await pumpSignedIn(tester);
+    final task = store.commonTasks.firstWhere(
+      (t) => t.createdBy == store.me.id,
+    );
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => TaskFormScreen(taskId: task.id),
+          ),
+        );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, 'My new title');
+
+    store.deleteTask(task.id);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Someone deleted this task'), findsOneWidget);
+    expect(find.textContaining('My new title'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save as new'));
+    await tester.pumpAndSettle();
+    expect(find.text('Saved as a new task'), findsOneWidget);
+    expect(store.taskById(task.id), isNull);
+    final saved = store.commonTasks.where((t) => t.title == 'My new title');
+    expect(saved, hasLength(1));
+    expect(saved.single.description, task.description);
   });
 }
