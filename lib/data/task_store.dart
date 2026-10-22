@@ -302,10 +302,14 @@ class TaskStore extends ChangeNotifier {
     }
   }
 
+  /// Null once the account is made; otherwise what went wrong. When the
+  /// server wants the email confirmed first, nobody is signed in yet and
+  /// [onCheckEmail] runs.
   Future<String?> signUp({
     required String fullName,
     required String email,
     required String password,
+    VoidCallback? onCheckEmail,
   }) async {
     final r = remote;
     if (r == null) {
@@ -322,7 +326,8 @@ class TaskStore extends ChangeNotifier {
       return null;
     }
     try {
-      await r.signUp(fullName.trim(), email.trim(), password);
+      final signedIn = await r.signUp(fullName.trim(), email.trim(), password);
+      if (!signedIn) onCheckEmail?.call();
       return null;
     } on TaskRemoteException catch (e) {
       return e.message;

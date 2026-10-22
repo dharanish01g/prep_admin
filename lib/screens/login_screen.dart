@@ -23,6 +23,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _busy = false;
   String? _error;
 
+  /// Shown after signing up when the account needs confirming by email.
+  String? _notice;
+
   @override
   void dispose() {
     _name.dispose();
@@ -37,12 +40,25 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _notice = null;
     });
+    final email = _email.text.trim();
     final error = _creating
         ? await store.signUp(
             fullName: _name.text,
             email: _email.text,
             password: _password.text,
+            onCheckEmail: () {
+              if (!mounted) return;
+              // Their email stays filled in, ready to sign in once confirmed.
+              _password.clear();
+              setState(() {
+                _creating = false;
+                _notice =
+                    'We sent a link to $email. Open it to confirm your '
+                    'account, then sign in.';
+              });
+            },
           )
         : await store.signInWithEmail(_email.text, _password.text);
     if (!mounted) return;
@@ -55,6 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _toggleMode() => setState(() {
     _creating = !_creating;
     _error = null;
+    _notice = null;
     _formKey.currentState?.reset();
   });
 
@@ -243,32 +260,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 if (_error != null) ...[
                                   const SizedBox(height: 12),
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: c.dangerSoft,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.error_outline_rounded,
-                                          size: 18,
-                                          color: c.danger,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            _error!,
-                                            style: TextStyle(
-                                              color: c.danger,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  _Message(
+                                    text: _error!,
+                                    icon: Icons.error_outline_rounded,
+                                    color: c.danger,
+                                    background: c.dangerSoft,
+                                  ),
+                                ],
+                                if (_notice != null) ...[
+                                  const SizedBox(height: 12),
+                                  _Message(
+                                    text: _notice!,
+                                    icon: Icons.mark_email_read_outlined,
+                                    color: c.info,
+                                    background: c.infoSoft,
                                   ),
                                 ],
                                 const SizedBox(height: 20),
@@ -378,6 +383,47 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Message extends StatelessWidget {
+  const _Message({
+    required this.text,
+    required this.icon,
+    required this.color,
+    required this.background,
+  });
+
+  final String text;
+  final IconData icon;
+  final Color color;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

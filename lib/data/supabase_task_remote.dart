@@ -61,13 +61,15 @@ class SupabaseTaskRemote implements TaskRemote {
   );
 
   @override
-  Future<void> signUp(String fullName, String email, String password) => _guard(
-    () => _db.auth.signUp(
-      email: email,
-      password: password,
-      data: {'full_name': fullName},
-    ),
-  );
+  Future<bool> signUp(String fullName, String email, String password) =>
+      _guard(() async {
+        final res = await _db.auth.signUp(
+          email: email,
+          password: password,
+          data: {'full_name': fullName},
+        );
+        return res.session != null;
+      });
 
   @override
   Future<void> signOut() => _guard(() => _db.auth.signOut());

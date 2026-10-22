@@ -49,7 +49,10 @@ abstract class TaskRemote {
   Stream<String?> get userIds;
 
   Future<void> signIn(String email, String password);
-  Future<void> signUp(String fullName, String email, String password);
+
+  /// True when signed in straight away; false when the server first wants
+  /// the email address confirmed through a link it sent.
+  Future<bool> signUp(String fullName, String email, String password);
   Future<void> signOut();
 
   /// Leaves every team, deletes the account and signs out.
