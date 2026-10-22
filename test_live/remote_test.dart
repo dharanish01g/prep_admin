@@ -290,6 +290,53 @@ void main() {
       () => bob.taskById(task.id)?.title == 'Prepare the demo',
     );
 
+    // Not creator nor assignee: the rules skip the row without an error, so
+    // the app has to notice nothing changed, say so and put it back.
+    final aliceOnly = alice.addTask(
+      title: 'Alice only',
+      scope: TaskScope.common,
+    );
+    await waitFor('bob sees it', () => bob.taskById(aliceOnly.id) != null);
+    bob.setStatus(bob.taskById(aliceOnly.id)!, TaskStatus.inProgress);
+    await waitFor('bob is refused the edit', () => errors.isNotEmpty);
+    expect(errors.removeLast(), contains("can't change this task"));
+    await waitFor(
+      'status restored',
+      () => bob.taskById(aliceOnly.id)?.status == TaskStatus.todo,
+    );
+    bob.deleteTask(aliceOnly.id);
+    await waitFor('bob is refused the delete', () => errors.isNotEmpty);
+    expect(errors.removeLast(), contains("can't delete this task"));
+    await waitFor('task restored', () => bob.taskById(aliceOnly.id) != null);
+
+    // Deleted elsewhere: an edit says so; deleting it again is fine.
+    final stale = bob.taskById(aliceOnly.id)!;
+    alice.deleteTask(aliceOnly.id);
+    await waitFor('alice deleted', () => bob.taskById(aliceOnly.id) == null);
+    await expectLater(
+      bob.remote!.updateTask(stale.copyWith(status: TaskStatus.done)),
+      throwsA(
+        isA<TaskRemoteException>().having(
+          (e) => e.message,
+          'message',
+          contains('Someone deleted this task'),
+        ),
+      ),
+    );
+    await alice.remote!.deleteTask(aliceOnly.id);
+
+    // Only the owner can change the team, even bypassing the app's check.
+    await expectLater(
+      bob.remote!.updateTeam(team.id, name: 'Taken over'),
+      throwsA(
+        isA<TaskRemoteException>().having(
+          (e) => e.message,
+          'message',
+          contains('Only the team owner'),
+        ),
+      ),
+    );
+
     // Only the owner can make a new code.
     await expectLater(
       SupabaseTaskRemote(newClient()).regenerateJoinCode(team.id),

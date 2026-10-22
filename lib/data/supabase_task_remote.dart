@@ -81,12 +81,21 @@ class SupabaseTaskRemote implements TaskRemote {
   });
 
   @override
-  Future<void> updateName(String fullName) => _guard(
-    () => _db
+  Future<void> updateName(String fullName) => _guard(() async {
+    final id = _db.auth.currentUser!.id;
+    final rows = await _db
         .from('profiles')
         .update({'full_name': fullName})
-        .eq('id', _db.auth.currentUser!.id),
-  );
+        .eq('id', id)
+        .select('id');
+    await _expectChanged(
+      rows,
+      'profiles',
+      id,
+      gone: "Couldn't save your name. Try again.",
+      refused: "Couldn't save your name. Try again.",
+    );
+  });
 
   @override
   Future<AppRelease?> latestRelease(String platform) => _guard(() async {
@@ -277,13 +286,32 @@ class SupabaseTaskRemote implements TaskRemote {
   );
 
   @override
-  Future<void> updateTask(Task task) => _guard(
-    () => _db.from('ic_tasks').update(_taskRow(task)).eq('id', task.id),
-  );
+  Future<void> updateTask(Task task) => _guard(() async {
+    final rows = await _db
+        .from('ic_tasks')
+        .update(_taskRow(task))
+        .eq('id', task.id)
+        .select('id');
+    await _expectChanged(
+      rows,
+      'ic_tasks',
+      task.id,
+      gone: "Someone deleted this task, so your change wasn't saved.",
+      refused: "You can't change this task, so your change wasn't saved.",
+    );
+  });
 
   @override
-  Future<void> deleteTask(String id) =>
-      _guard(() => _db.from('ic_tasks').delete().eq('id', id));
+  Future<void> deleteTask(String id) => _guard(() async {
+    final rows = await _db.from('ic_tasks').delete().eq('id', id).select('id');
+    // Already deleted by someone else: that's what was wanted anyway.
+    await _expectChanged(
+      rows,
+      'ic_tasks',
+      id,
+      refused: "You can't delete this task.",
+    );
+  });
 
   @override
   Future<Team> createTeam(String name, int colorIndex) => _guard(() async {
@@ -322,12 +350,38 @@ class SupabaseTaskRemote implements TaskRemote {
 
   @override
   Future<void> updateTeam(String teamId, {String? name, int? colorIndex}) =>
-      _guard(
-        () => _db
+      _guard(() async {
+        final rows = await _db
             .from('ic_teams')
             .update({'name': ?name, 'color': ?colorIndex})
-            .eq('id', teamId),
-      );
+            .eq('id', teamId)
+            .select('id');
+        await _expectChanged(
+          rows,
+          'ic_teams',
+          teamId,
+          gone: "You're no longer in this team.",
+          refused: 'Only the team owner can change the team.',
+        );
+      });
+
+  /// The server's access rules don't fail an update or delete they refuse:
+  /// it just changes no rows. So the changed [rows] are asked for back, and
+  /// when there are none, a look at whether the row still exists tells
+  /// [gone] (deleted, or no longer visible) from [refused]. A null [gone]
+  /// means a missing row is fine.
+  Future<void> _expectChanged(
+    List<Map<String, dynamic>> rows,
+    String table,
+    String id, {
+    String? gone,
+    required String refused,
+  }) async {
+    if (rows.isNotEmpty) return;
+    final row = await _db.from(table).select('id').eq('id', id).maybeSingle();
+    if (row != null) throw TaskRemoteException(refused);
+    if (gone != null) throw TaskRemoteException(gone);
+  }
 
   @override
   Future<String> regenerateJoinCode(String teamId) => _guard(
@@ -372,7 +426,12 @@ class SupabaseTaskRemote implements TaskRemote {
       });
     } on PostgrestException catch (e) {
       onReachability?.call(true);
-      throw TaskRemoteException(e.message);
+      throw TaskRemoteException(switch (e.code) {
+        // Refused by the access rules, e.g. "new row violates row-level
+        // security policy".
+        '42501' => "You don't have permission to do that.",
+        _ => e.message,
+      });
     } on TaskRemoteException {
       rethrow;
     } on IOException {
