@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:http/http.dart' show ClientException;
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -24,6 +27,8 @@ class SupabaseTaskRemote implements TaskRemote {
     : _ready = Supabase.initialize(
         url: supabaseUrl,
         publishableKey: supabasePublishableKey,
+        // Records each request as a breadcrumb and reports 5xx answers.
+        httpClient: SentryHttpClient(),
       ).then((s) => s.client) {
     // Registered before any request can await [_ready], so [_db] is set by
     // the time they resume.
@@ -148,8 +153,9 @@ class SupabaseTaskRemote implements TaskRemote {
           [for (final r in table as List<dynamic>) r as Map<String, dynamic>],
       ]);
       return (userId: json['user'] as String, snapshot: snapshot);
-    } catch (_) {
+    } catch (e, stack) {
       // Unreadable (e.g. saved by an older version): load from the server.
+      unawaited(Sentry.captureException(e, stackTrace: stack));
       return null;
     }
   }
@@ -302,7 +308,14 @@ class SupabaseTaskRemote implements TaskRemote {
       throw TaskRemoteException(e.message);
     } on TaskRemoteException {
       rethrow;
-    } catch (_) {
+    } catch (e, stack) {
+      // Losing the connection is expected; anything else is a bug worth
+      // seeing, even though the user is told they're offline.
+      if (e is! SocketException &&
+          e is! ClientException &&
+          e is! TimeoutException) {
+        unawaited(Sentry.captureException(e, stackTrace: stack));
+      }
       onReachability?.call(false);
       throw _offline;
     }

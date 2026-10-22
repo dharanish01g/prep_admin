@@ -176,11 +176,16 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
-            PillToggle<TaskScope>(
-              options: [for (final s in TaskScope.values) (s, s.label, s.icon)],
-              selected: _scope,
-              onChanged: (s) => setState(() => _scope = s),
-            ),
+            // Only the creator may make a task personal: an owner looking
+            // after a departed member's task keeps it common.
+            if (_editing == null || _editing!.createdBy == store.me.id)
+              PillToggle<TaskScope>(
+                options: [
+                  for (final s in TaskScope.values) (s, s.label, s.icon),
+                ],
+                selected: _scope,
+                onChanged: (s) => setState(() => _scope = s),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
               child: Text(

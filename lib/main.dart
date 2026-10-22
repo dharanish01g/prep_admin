@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
+import 'config.dart';
 import 'data/supabase_task_remote.dart';
 import 'data/task_store.dart';
 import 'screens/home_screen.dart';
@@ -8,12 +11,31 @@ import 'screens/team_setup_screen.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
+Future<void> main() async {
+  await SentryFlutter.init((options) {
+    options.dsn = sentryDsn;
+    options.environment = kReleaseMode ? 'production' : 'development';
+    // No IP address or names; reports carry only the anonymous user id below.
+    options.sendDefaultPii = false;
+    options.tracesSampleRate = kReleaseMode ? 0.2 : 1.0;
+  }, appRunner: _run);
+}
+
+void _run() {
   // Draw first; Supabase starts in the background (see
   // SupabaseTaskRemote.initialize) while the store opens from its saved copy.
   final store = TaskStore.connected(SupabaseTaskRemote.initialize());
-  runApp(PrepAdminApp(store: store));
+  // Tag reports with who hit them, so one person's problem can be followed.
+  String? reportedUser;
+  store.addListener(() {
+    final id = store.currentUser?.id;
+    if (id == reportedUser) return;
+    reportedUser = id;
+    Sentry.configureScope(
+      (scope) => scope.setUser(id == null ? null : SentryUser(id: id)),
+    );
+  });
+  runApp(SentryWidget(child: PrepAdminApp(store: store)));
 }
 
 class PrepAdminApp extends StatefulWidget {

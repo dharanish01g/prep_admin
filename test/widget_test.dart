@@ -234,6 +234,38 @@ void main() {
     expect(store.taskById(t.id)!.assignedTo, t.createdBy);
   });
 
+  test('owner looks after tasks whose creator left the team', () async {
+    final store = TaskStore.mock();
+    // Priya (m2) creates a common task in PrepWisely, owned by Arun (m1).
+    store.signIn(store.memberByEmail('priya@team.test')!);
+    store.selectTeam('tm1');
+    final t = store.addTask(title: 'Left behind', scope: TaskScope.common);
+    await store.leaveTeam('tm1');
+
+    // Karthik (m3) is a plain member: still read-only.
+    store.signIn(store.memberByEmail('karthik@team.test')!);
+    expect(store.canEdit(store.taskById(t.id)!), isFalse);
+
+    // Arun is the owner: he can now edit and delete it.
+    store.signIn(store.memberByEmail('arun@team.test')!);
+    store.selectTeam('tm1');
+    final orphan = store.taskById(t.id)!;
+    expect(store.canEdit(orphan), isTrue);
+    expect(store.canChangeStatus(orphan), isTrue);
+    store.deleteTask(orphan.id);
+    expect(store.taskById(t.id), isNull);
+  });
+
+  test('owner cannot edit tasks of members still in the team', () {
+    final store = TaskStore.mock();
+    store.signIn(store.memberByEmail('priya@team.test')!);
+    store.selectTeam('tm1');
+    final t = store.addTask(title: 'Mine', scope: TaskScope.common);
+    store.signIn(store.memberByEmail('arun@team.test')!);
+    store.selectTeam('tm1');
+    expect(store.canEdit(store.taskById(t.id)!), isFalse);
+  });
+
   testWidgets('deleting the account signs out and removes the member', (
     tester,
   ) async {

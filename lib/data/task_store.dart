@@ -838,8 +838,11 @@ class TaskStore extends ChangeNotifier {
     return task;
   }
 
-  /// Only the creator edits or deletes a task.
-  bool canEdit(Task task) => task.createdBy == me.id;
+  /// The creator edits or deletes a task. Once they've left the team (or
+  /// deleted their account), the team owner looks after it instead.
+  bool canEdit(Task task) =>
+      task.createdBy == me.id ||
+      (isOwner(task.teamId) && membership(task.teamId, task.createdBy) == null);
 
   /// The creator and the assignee can move a task between statuses.
   bool canChangeStatus(Task task) => canEdit(task) || task.assignedTo == me.id;

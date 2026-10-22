@@ -52,3 +52,6 @@ supabase/.temp/
 
 # Screenshot dummy data: names real users, never publish.
 /supabase/screenshots/
+
+# Local QA notes, not for the public repo.
+/docs.md

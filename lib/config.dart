@@ -8,3 +8,8 @@ const privacyPolicyUrl =
     'https://dharanish01g.github.io/prepwisely-team/privacy.html';
 const deleteAccountUrl =
     'https://dharanish01g.github.io/prepwisely-team/delete-account.html';
+
+/// Crash and error reports go to the tiny-tasks Sentry project. Like the
+/// Supabase key, a DSN only lets the app send events, so it's fine to ship.
+const sentryDsn =
+    'https://35aafbb19f2152526a8e2183b3b80bfe@o4512011940200448.ingest.de.sentry.io/4512292080386128';
