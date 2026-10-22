@@ -72,13 +72,38 @@ class SupabaseTaskRemote implements TaskRemote {
   @override
   Future<void> signOut() => _guard(() => _db.auth.signOut());
 
-  // The login is gone (and its sessions with it), so only the local session
-  // is left to clear.
   @override
   Future<void> deleteAccount() => _guard(() async {
-    await _db.rpc<void>('ic_delete_account');
-    await _db.auth.signOut(scope: SignOutScope.local);
+    try {
+      await _db.rpc<void>('ic_delete_account');
+    } catch (e) {
+      // The answer can be lost after the server has already deleted it.
+      if (!_isConnectionError(e) || !await _accountGone()) rethrow;
+    }
+    // The login is gone (and its sessions with it). Signing out clears this
+    // device first, then tells the server, which has nothing left to do, so
+    // a failure there doesn't matter.
+    try {
+      await _db.auth.signOut(scope: SignOutScope.local);
+    } catch (_) {}
   });
+
+  /// Whether the server says the signed-in account no longer exists. False
+  /// when it can't tell (e.g. still offline).
+  Future<bool> _accountGone() async {
+    try {
+      await _db.auth.getUser();
+      return false;
+    } on AuthRetryableFetchException {
+      return false;
+    } on AuthException catch (e) {
+      return e.code == 'user_not_found' ||
+          e.statusCode == '403' ||
+          e.statusCode == '404';
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   Future<void> updateName(String fullName) => _guard(() async {
@@ -409,10 +434,11 @@ class SupabaseTaskRemote implements TaskRemote {
       final result = await op();
       onReachability?.call(true);
       return result;
-    } on AuthRetryableFetchException {
-      onReachability?.call(false);
-      throw _offline;
     } on AuthException catch (e) {
+      if (_isConnectionError(e)) {
+        onReachability?.call(false);
+        throw _offline;
+      }
       onReachability?.call(true);
       throw TaskRemoteException(switch (e.code) {
         'invalid_credentials' => 'Wrong email or password.',
@@ -434,22 +460,24 @@ class SupabaseTaskRemote implements TaskRemote {
       });
     } on TaskRemoteException {
       rethrow;
-    } on IOException {
-      // Includes sockets, TLS handshakes and broken HTTP replies.
-      onReachability?.call(false);
-      throw _offline;
-    } on ClientException {
-      onReachability?.call(false);
-      throw _offline;
-    } on TimeoutException {
-      onReachability?.call(false);
-      throw _offline;
     } catch (e, stack) {
+      if (_isConnectionError(e)) {
+        onReachability?.call(false);
+        throw _offline;
+      }
       // A bug, not the connection: report it and leave the banner alone.
       unawaited(Sentry.captureException(e, stackTrace: stack));
       throw const TaskRemoteException('Something went wrong. Try again.');
     }
   }
+
+  /// No answer from the server. [IOException] includes sockets, TLS
+  /// handshakes and broken HTTP replies.
+  static bool _isConnectionError(Object e) =>
+      e is AuthRetryableFetchException ||
+      e is IOException ||
+      e is ClientException ||
+      e is TimeoutException;
 
   static const _offline = TaskRemoteException(
     "Couldn't reach the server. Check your connection.",

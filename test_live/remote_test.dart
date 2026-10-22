@@ -4,7 +4,10 @@
 // Both accounts delete themselves at the end; if a run fails midway, it
 // prints the accounts it made so they can be deleted by hand.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:prep_admin/config.dart';
 import 'package:prep_admin/data/supabase_task_remote.dart';
 import 'package:prep_admin/data/task_remote.dart';
@@ -13,11 +16,30 @@ import 'package:prep_admin/models/task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-SupabaseClient newClient() => SupabaseClient(
+SupabaseClient newClient({http.Client? httpClient}) => SupabaseClient(
   supabaseUrl,
   supabasePublishableKey,
+  httpClient: httpClient,
   authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
 );
+
+/// Sends requests whose path ends with one of [drop], then loses the
+/// answer, like a connection dying the moment the server is done.
+class LosesAnswers extends http.BaseClient {
+  LosesAnswers(this.drop);
+  final List<String> drop;
+  final _inner = http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final response = await _inner.send(request);
+    if (drop.any(request.url.path.endsWith)) {
+      await response.stream.drain<void>();
+      throw const SocketException('Connection lost');
+    }
+    return response;
+  }
+}
 
 Future<void> waitFor(
   String what,
@@ -193,6 +215,44 @@ void main() {
     await app.deleteAccount();
     await waitFor('signed out', () => app.currentUser == null);
     app.dispose();
+  }, timeout: const Timeout(Duration(minutes: 1)));
+
+  test('deleting the account works when its answers are lost', () async {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final email = 'qa.delete.$stamp@example.com';
+    // ignore: avoid_print
+    print('TEST ACCOUNT: $email');
+    final store = TaskStore.connected(
+      SupabaseTaskRemote(
+        newClient(
+          httpClient: LosesAnswers(['/rpc/ic_delete_account', '/logout']),
+        ),
+      ),
+      watchNetwork: false,
+    );
+    await waitFor('start', () => !store.starting);
+    expect(
+      await store.signUp(
+        fullName: 'Delete QA',
+        email: email,
+        password: 'password-123',
+      ),
+      isNull,
+    );
+    await waitFor('signed in', () => store.currentUser != null);
+    await store.createTeam(name: 'QA Delete', colorIndex: 0);
+
+    await store.deleteAccount();
+    await waitFor('signed out', () => store.currentUser == null);
+    final check = TaskStore.connected(
+      SupabaseTaskRemote(newClient()),
+      watchNetwork: false,
+    );
+    await waitFor('check start', () => !check.starting);
+    expect(
+      await check.signInWithEmail(email, 'password-123'),
+      'Wrong email or password.',
+    );
   }, timeout: const Timeout(Duration(minutes: 1)));
 
   test('two people share a team through Supabase', () async {
