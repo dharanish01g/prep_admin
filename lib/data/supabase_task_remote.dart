@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:http/http.dart' show ClientException;
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -119,11 +120,28 @@ class SupabaseTaskRemote implements TaskRemote {
 
   static RemoteSnapshot _snapshot(List<List<Map<String, dynamic>>> rows) =>
       RemoteSnapshot(
-        members: rows[0].map(_member).toList(),
-        teams: rows[1].map(_team).toList(),
-        memberships: rows[2].map(_membership).toList(),
-        tasks: rows[3].map(_task).toList(),
+        members: _readAll(rows[0], _member),
+        teams: _readAll(rows[1], _team),
+        memberships: _readAll(rows[2], _membership),
+        tasks: _readAll(rows[3], _task),
       );
+
+  /// Leaves out rows this version can't read (e.g. a status added later), so
+  /// one odd row doesn't keep everything else from loading.
+  static List<T> _readAll<T>(
+    List<Map<String, dynamic>> rows,
+    T Function(Map<String, dynamic>) read,
+  ) {
+    final out = <T>[];
+    for (final r in rows) {
+      try {
+        out.add(read(r));
+      } catch (e, stack) {
+        unawaited(Sentry.captureException(e, stackTrace: stack));
+      }
+    }
+    return out;
+  }
 
   Future<void> _saveCache(
     String userId,
@@ -172,8 +190,22 @@ class SupabaseTaskRemote implements TaskRemote {
   }
 
   @override
+  void Function(bool live)? onLive;
+
+  void Function()? _onChange;
+  Timer? _resubscribe;
+  int _failures = 0;
+
+  @override
   void listen(void Function() onChange) {
     stopListening();
+    _onChange = onChange;
+    _subscribe();
+  }
+
+  void _subscribe() {
+    final onChange = _onChange;
+    if (onChange == null) return;
     final channel = _db.channel('ic-changes');
     for (final table in [
       'ic_tasks',
@@ -193,12 +225,47 @@ class SupabaseTaskRemote implements TaskRemote {
     // up every time it (re)connects.
     _channel = channel
       ..subscribe((status, _) {
-        if (status == RealtimeSubscribeStatus.subscribed) onChange();
+        // Replaced or stopped: its leftover events don't matter.
+        if (_channel != channel) return;
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          _failures = 0;
+          _resubscribe?.cancel();
+          _resubscribe = null;
+          onLive?.call(true);
+          onChange();
+        } else {
+          onLive?.call(false);
+          _scheduleResubscribe(channel);
+        }
       });
+  }
+
+  /// The client rejoins after socket errors by itself, but not when the
+  /// server drops the subscription (e.g. an expired token) or the channel
+  /// closes, which leaves it looking joined while delivering nothing. So
+  /// start over with a fresh channel unless it recovers first. One attempt
+  /// at a time, waiting longer after each failure.
+  void _scheduleResubscribe(RealtimeChannel failed) {
+    if (_resubscribe != null) return;
+    final delay = Duration(seconds: min(5 << _failures, 60));
+    _failures++;
+    _resubscribe = Timer(delay, () async {
+      _resubscribe = null;
+      if (_channel != failed) return;
+      _channel = null;
+      await _db.removeChannel(failed);
+      // Stopped, or listening anew, while the old channel was leaving.
+      if (_channel != null) return;
+      _subscribe();
+    });
   }
 
   @override
   void stopListening() {
+    _onChange = null;
+    _failures = 0;
+    _resubscribe?.cancel();
+    _resubscribe = null;
     final channel = _channel;
     _channel = null;
     if (channel != null) _db.removeChannel(channel);
@@ -308,16 +375,20 @@ class SupabaseTaskRemote implements TaskRemote {
       throw TaskRemoteException(e.message);
     } on TaskRemoteException {
       rethrow;
-    } catch (e, stack) {
-      // Losing the connection is expected; anything else is a bug worth
-      // seeing, even though the user is told they're offline.
-      if (e is! SocketException &&
-          e is! ClientException &&
-          e is! TimeoutException) {
-        unawaited(Sentry.captureException(e, stackTrace: stack));
-      }
+    } on IOException {
+      // Includes sockets, TLS handshakes and broken HTTP replies.
       onReachability?.call(false);
       throw _offline;
+    } on ClientException {
+      onReachability?.call(false);
+      throw _offline;
+    } on TimeoutException {
+      onReachability?.call(false);
+      throw _offline;
+    } catch (e, stack) {
+      // A bug, not the connection: report it and leave the banner alone.
+      unawaited(Sentry.captureException(e, stackTrace: stack));
+      throw const TaskRemoteException('Something went wrong. Try again.');
     }
   }
 

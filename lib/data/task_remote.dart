@@ -79,7 +79,12 @@ abstract class TaskRemote {
   Future<void> clearCache();
 
   /// Calls [onChange] whenever data the user can see changes elsewhere.
+  /// Resubscribes on its own if the live connection drops.
   void listen(void Function() onChange);
+
+  /// Told whether changes made elsewhere are arriving (true) or the live
+  /// connection dropped (false) while [listen]ing.
+  void Function(bool live)? onLive;
   void stopListening();
 
   Future<void> insertTask(Task task);

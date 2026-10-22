@@ -390,4 +390,37 @@ void main() {
     final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(nav.selectedIndex, 1);
   });
+
+  testWidgets('reconnecting banner shows when live updates drop', (
+    tester,
+  ) async {
+    final store = await pumpSignedIn(tester);
+    store.live.value = false;
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Reconnecting'), findsOneWidget);
+
+    // No internet says more, so it wins.
+    store.online.value = false;
+    await tester.pumpAndSettle();
+    expect(find.text('No internet connection'), findsOneWidget);
+    expect(find.textContaining('Reconnecting'), findsNothing);
+
+    store.online.value = true;
+    store.live.value = true;
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Reconnecting'), findsNothing);
+  });
+
+  testWidgets('progress line shows while syncing', (tester) async {
+    final store = await pumpSignedIn(tester);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+
+    store.syncing.value = true;
+    await tester.pump();
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+    store.syncing.value = false;
+    await tester.pumpAndSettle();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
 }

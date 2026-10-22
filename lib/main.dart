@@ -9,7 +9,7 @@ import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/team_setup_screen.dart';
 import 'theme/app_theme.dart';
-import 'widgets/offline_banner.dart';
+import 'widgets/connection_banner.dart';
 
 Future<void> main() async {
   await SentryFlutter.init((options) {
@@ -81,7 +81,7 @@ class _PrepAdminAppState extends State<PrepAdminApp> {
           darkTheme: buildAppTheme(Brightness.dark),
           themeMode: widget.themeMode ?? themeMode,
           builder: (context, child) =>
-              OfflineBanner(online: widget.store.online, child: child!),
+              ConnectionBanner(store: widget.store, child: child!),
           home: const _Root(),
         ),
       ),

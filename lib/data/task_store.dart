@@ -116,7 +116,9 @@ class TaskStore extends ChangeNotifier {
       notifyListeners();
     });
     unawaited(_loadTheme());
-    remote!.onReachability = _setOnline;
+    remote!
+      ..onReachability = _setOnline
+      ..onLive = _setLive;
     if (watchNetwork) _watchNetwork();
     unawaited(_openFromCache());
   }
@@ -140,6 +142,7 @@ class TaskStore extends ChangeNotifier {
     _pendingUserId = null;
     if (userId == null) {
       r.stopListening();
+      _setLive(true);
       _clear();
       unawaited(r.clearCache());
       _starting = false;
@@ -185,6 +188,43 @@ class TaskStore extends ChangeNotifier {
 
   /// False while the server can't be reached; the app shows a banner.
   final online = ValueNotifier(true);
+
+  /// False while teammates' changes aren't arriving live; the app says it's
+  /// reconnecting. Only turns false after a few seconds, so a quick blip
+  /// doesn't flash the banner.
+  final live = ValueNotifier(true);
+  Timer? _liveTimer;
+
+  /// True while data is being loaded from or saved to the server; the app
+  /// shows a thin progress line.
+  final syncing = ValueNotifier(false);
+  int _inFlight = 0;
+
+  void _setLive(bool value) {
+    if (_disposed) return;
+    if (value) {
+      _liveTimer?.cancel();
+      _liveTimer = null;
+      live.value = true;
+    } else {
+      _liveTimer ??= Timer(const Duration(seconds: 4), () {
+        _liveTimer = null;
+        if (!_disposed) live.value = false;
+      });
+    }
+  }
+
+  Future<T> _track<T>(Future<T> request) async {
+    _inFlight++;
+    syncing.value = true;
+    try {
+      return await request;
+    } finally {
+      _inFlight--;
+      if (!_disposed) syncing.value = _inFlight > 0;
+    }
+  }
+
   String? _pendingUserId;
   StreamSubscription<List<ConnectivityResult>>? _networkSub;
   Timer? _retryTimer;
@@ -366,7 +406,7 @@ class TaskStore extends ChangeNotifier {
     _tasks.clear();
   }
 
-  Future<void> _reload() async => _apply(await remote!.fetch());
+  Future<void> _reload() async => _apply(await _track(remote!.fetch()));
 
   void _apply(RemoteSnapshot s) {
     _members
@@ -400,7 +440,7 @@ class TaskStore extends ChangeNotifier {
   Future<void> refresh() async {
     if (remote == null || _currentUser == null) return;
     try {
-      final snapshot = await remote!.fetch();
+      final snapshot = await _track(remote!.fetch());
       if (_disposed) return;
       _apply(snapshot);
       notifyListeners();
@@ -478,6 +518,9 @@ class TaskStore extends ChangeNotifier {
     _networkSub?.cancel();
     _retryTimer?.cancel();
     online.dispose();
+    _liveTimer?.cancel();
+    live.dispose();
+    syncing.dispose();
     _refreshDebounce?.cancel();
     remote?.stopListening();
     themeMode.dispose();
@@ -884,7 +927,7 @@ class TaskStore extends ChangeNotifier {
   void _sync(Future<void> Function(TaskRemote r) op) {
     final r = remote;
     if (r == null) return;
-    op(r).catchError((Object e) {
+    _track(op(r)).catchError((Object e) {
       onError?.call(switch (e) {
         TaskRemoteException(offline: true) =>
           "You're offline, so that change wasn't saved.",
